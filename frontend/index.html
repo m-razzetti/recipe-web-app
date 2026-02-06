@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Recipes</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+    }
+
+    .layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 300px;
+      padding: 16px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+    }
+
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    li {
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    img {
+      max-width: 100%;
+      display: block;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="layout">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar">
+    <h2>Recipes</h2>
+    <ul id="recipe-list"></ul>
+
+    <hr>
+
+    <h3>Paste Markdown</h3>
+    <input id="recipe-name" placeholder="Recipe name" />
+    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
+    <button onclick="saveRecipe()">Save Recipe</button>
+
+    <h3>Add Photo</h3>
+    <input type="file" id="photo-input" />
+  </div>
+
+  <!-- RIGHT CONTENT -->
+  <div class="content">
+    <h1>Select a recipe</h1>
+    <div id="recipe-content"></div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://192.168.1.3:9001/api";
+
+/* ---------- Helpers ---------- */
+
+function normalizeMarkdown(text) {
+  return text
+    .replace(/\uFEFF/g, "")        // BOM
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function rewriteImageUrls(html, recipeName) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+
+  div.querySelectorAll("img").forEach(img => {
+    const src = img.getAttribute("src");
+    if (!src) return;
+    if (src.startsWith("http") || src.startsWith("data:")) return;
+
+    const filename = src.split("/").pop();
+    img.src =
+      `${API}/photos/` +
+      `${encodeURIComponent(recipeName)}/` +
+      `${encodeURIComponent(filename)}`;
+  });
+
+  return div.innerHTML;
+}
+
+/* ---------- Load recipe list ---------- */
+
+async function loadRecipes() {
+  const res = await fetch(`${API}/recipes`);
+  const recipes = await res.json();
+
+  const list = document.getElementById("recipe-list");
+  list.innerHTML = "";
+
+  if (!recipes.length) {
+    list.innerHTML = "<li><em>No recipes found</em></li>";
+    return;
+  }
+
+  recipes.forEach(name => {
+    const li = document.createElement("li");
+    li.textContent = name;
+    li.onclick = () => loadRecipe(name);
+    list.appendChild(li);
+  });
+}
+
+/* ---------- Load a recipe ---------- */
+
+async function loadRecipe(name) {
+  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
+  const markdown = await res.text();
+
+  const cleaned = normalizeMarkdown(markdown);
+  const html = marked.parse(cleaned);
+  const finalHtml = rewriteImageUrls(html, name);
+
+  document.getElementById("recipe-content").innerHTML = finalHtml;
+}
+
+/* ---------- Save recipe + optional photo ---------- */
+
+async function saveRecipe() {
+  const name = document.getElementById("recipe-name").value.trim();
+  const markdown = document.getElementById("recipe-markdown").value;
+  const photoInput = document.getElementById("photo-input");
+
+  if (!name || !markdown) {
+    alert("Recipe name and markdown are required");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("name", name);
+  form.append("markdown", markdown);
+
+  if (photoInput.files.length > 0) {
+    form.append("photo", photoInput.files[0]);
+  }
+
+  const res = await fetch(`${API}/recipes`, {
+    method: "POST",
+    body: form
+  });
+
+  if (!res.ok) {
+    alert("Failed to save recipe");
+    return;
+  }
+
+  // reset only AFTER save
+  document.getElementById("recipe-name").value = "";
+  document.getElementById("recipe-markdown").value = "";
+  photoInput.value = "";
+
+  await loadRecipes();
+}
+  
+loadRecipes();
+</script>
+</body>
+</html>

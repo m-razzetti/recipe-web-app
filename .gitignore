@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Docker
+*.log
+
+# Node / frontend
+node_modules/
+
+# OS junk
+.DS_Store
+
+# Secrets
+.env
+.env.*

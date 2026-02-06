@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>My Recipes</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    li { cursor: pointer; margin: 0.3rem 0; }
+    pre { background: #f4f4f4; padding: 1rem; }
+  </style>
+</head>
+<body>
+
+<h1>Recipes</h1>
+<ul id="recipes"></ul>
+
+<h2>Recipe</h2>
+<pre id="recipe"></pre>
+
+<script>
+const API = "http://localhost:9001/api";
+
+fetch(`${API}/recipes`)
+  .then(res => res.json())
+  .then(data => {
+    const ul = document.getElementById("recipes");
+    data.forEach(r => {
+      const li = document.createElement("li");
+      li.textContent = r.name;
+      li.onclick = () => loadRecipe(r.name);
+      ul.appendChild(li);
+    });
+  });
+
+function loadRecipe(name) {
+  fetch(`${API}/recipes/${name}`)
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("recipe").textContent =
+        JSON.stringify(data, null, 2);
+    });
+}
+</script>
+
+</body>
+</html>
