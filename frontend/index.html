@@ -9,90 +9,82 @@
 </head>
 
 <body>
-<div class="app">
+<div class="layout">
 
-  <!-- SIDEBAR -->
+  <!-- LEFT SIDEBAR -->
   <aside class="sidebar">
     <h2>Library</h2>
+    <input class="search" placeholder="Search (coming soon)" />
 
-    <h3>Paste Markdown</h3>
-    <input id="recipe-name" placeholder="Recipe name" />
-    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
-
-    <input type="file" id="photo-input" />
-    <button onclick="saveRecipe()">Save Recipe</button>
+    <button class="primary" onclick="openImport()">➕ Import Recipe</button>
   </aside>
 
   <!-- MAIN CONTENT -->
   <main class="content">
-
-    <!-- GRID VIEW -->
-    <div id="grid-view">
-      <div id="recipe-grid" class="grid"></div>
-    </div>
-
-    <!-- RECIPE VIEW -->
-    <div id="recipe-view" style="display:none">
-      <div style="display:flex; gap:8px; margin-bottom:12px">
-        <button onclick="showGrid()">← Back</button>
-        <button onclick="editCurrentRecipe()">Edit</button>
-      </div>
-
-      <div id="recipe-content" class="recipe"></div>
-    </div>
-
+    <div id="recipe-grid" class="grid"></div>
   </main>
 
 </div>
 
 <script>
 const API = "http://192.168.1.3:9001/api";
-let currentRecipe = null;
 
-/* ---------- View helpers ---------- */
+/* ---------- Ensure grid exists ---------- */
 
-function showGrid() {
-  document.getElementById("recipe-view").style.display = "none";
-  document.getElementById("grid-view").style.display = "block";
-  currentRecipe = null;
+function ensureGridView() {
+  const content = document.querySelector(".content");
+  let grid = document.getElementById("recipe-grid");
+
+  // If we're currently in import/edit/recipe view, the grid container is gone.
+  if (!grid) {
+    content.innerHTML = `<div id="recipe-grid" class="grid"></div>`;
+    grid = document.getElementById("recipe-grid");
+  }
+
+  return grid;
 }
 
-function showRecipe() {
-  document.getElementById("grid-view").style.display = "none";
-  document.getElementById("recipe-view").style.display = "block";
+/* ---------- Cover image helper ---------- */
+
+async function getCoverImage(recipe) {
+  try {
+    const res = await fetch(`${API}/recipes/${encodeURIComponent(recipe)}/cover`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.url) return null;
+    return API + data.url;
+  } catch {
+    return null;
+  }
 }
 
-/* ---------- Load recipe cards ---------- */
+/* ---------- Grid ---------- */
 
 async function loadRecipes() {
+  const grid = ensureGridView();
+
   const res = await fetch(`${API}/recipes`);
   const recipes = await res.json();
 
-  const grid = document.getElementById("recipe-grid");
   grid.innerHTML = "";
 
   for (const name of recipes) {
     const card = document.createElement("div");
     card.className = "card";
 
-    const image = document.createElement("div");
-    image.className = "card-image";
+    const img = document.createElement("div");
+    img.className = "card-image";
 
-    const mdRes = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-    const md = await mdRes.text();
-    const match = md.match(/!\[[^\]]*]\(([^)]+)\)/);
-
-    if (match) {
-      const filename = match[1];
-      image.style.backgroundImage =
-        `url('${API}/photos/${encodeURIComponent(name)}/${encodeURIComponent(filename)}')`;
+    const cover = await getCoverImage(name);
+    if (cover) {
+      img.style.backgroundImage = `url('${cover}')`;
     }
 
     const title = document.createElement("div");
     title.className = "card-title";
     title.textContent = name;
 
-    card.appendChild(image);
+    card.appendChild(img);
     card.appendChild(title);
 
     card.onclick = () => loadRecipe(name);
@@ -100,50 +92,81 @@ async function loadRecipes() {
   }
 }
 
-/* ---------- Load single recipe ---------- */
+/* ---------- View recipe ---------- */
 
 async function loadRecipe(name) {
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
   const markdown = await res.text();
 
-  currentRecipe = name;
+  const html = marked.parse(markdown);
 
-  document.getElementById("recipe-content").innerHTML =
-    marked.parse(markdown);
+  document.querySelector(".content").innerHTML = `
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+      <button onclick="loadRecipes()">← Back</button>
+      <button onclick="openEdit('${escapeHtmlAttr(name)}')">✏️ Edit</button>
+    </div>
+    <div class="recipe">${html}</div>
+  `;
 
   rewriteImages(name);
-  showRecipe();
 }
 
 function rewriteImages(recipe) {
-  document.querySelectorAll("#recipe-content img").forEach(img => {
-    const filename = img.getAttribute("src").split("/").pop();
-    img.src =
-      `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(filename)}`;
+  document.querySelectorAll(".recipe img").forEach(img => {
+    const src = img.getAttribute("src") || "";
+    if (src.startsWith("http") || src.startsWith("data:")) return;
+
+    const filename = src.split("/").pop();
+    img.src = `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(filename)}`;
   });
 }
 
-/* ---------- Edit recipe ---------- */
+/* ---------- Import / Edit ---------- */
 
-async function editCurrentRecipe() {
-  if (!currentRecipe) return;
-
-  const res = await fetch(`${API}/recipes/${encodeURIComponent(currentRecipe)}`);
-  const markdown = await res.text();
-
-  recipeName.value = currentRecipe;
-  recipeMarkdown.value = markdown;
-  photoInput.value = "";
-
-  showGrid();
+function openImport() {
+  document.querySelector(".content").innerHTML = `
+    <h2>Import Recipe</h2>
+    <input id="recipe-name" placeholder="Recipe name" />
+    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
+    <input type="file" id="photo-input" />
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button class="primary" onclick="saveRecipe()">Save</button>
+      <button onclick="loadRecipes()">Cancel</button>
+    </div>
+  `;
 }
 
-/* ---------- Save recipe ---------- */
+async function openEdit(name) {
+  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
+  const markdown = await res.text();
+
+  document.querySelector(".content").innerHTML = `
+    <h2>Edit Recipe</h2>
+    <input id="recipe-name" value="${escapeHtmlAttr(name)}" />
+    <textarea id="recipe-markdown">${escapeHtmlText(markdown)}</textarea>
+    <input type="file" id="photo-input" />
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button class="primary" onclick="saveRecipe()">Save</button>
+      <button onclick="loadRecipes()">Cancel</button>
+    </div>
+  `;
+}
+
+/* ---------- Save ---------- */
 
 async function saveRecipe() {
-  const name = recipeName.value.trim();
-  const markdown = recipeMarkdown.value;
-  const photo = photoInput.files[0];
+  const nameEl = document.getElementById("recipe-name");
+  const mdEl = document.getElementById("recipe-markdown");
+  const photoEl = document.getElementById("photo-input");
+
+  if (!nameEl || !mdEl) {
+    alert("Missing form fields (UI not loaded).");
+    return;
+  }
+
+  const name = nameEl.value.trim();
+  const markdown = mdEl.value;
+  const photo = photoEl?.files?.[0];
 
   if (!name || !markdown) {
     alert("Name and markdown required");
@@ -165,19 +188,27 @@ async function saveRecipe() {
     return;
   }
 
-  recipeName.value = "";
-  recipeMarkdown.value = "";
-  photoInput.value = "";
-
-  showGrid();
   loadRecipes();
 }
 
-/* ---------- Init ---------- */
+/* ---------- tiny HTML safety helpers ---------- */
 
-const recipeName = document.getElementById("recipe-name");
-const recipeMarkdown = document.getElementById("recipe-markdown");
-const photoInput = document.getElementById("photo-input");
+function escapeHtmlAttr(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeHtmlText(str) {
+  // for textarea innerHTML
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
 
 loadRecipes();
 </script>
