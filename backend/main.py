@@ -36,10 +36,6 @@ def recipe_folder(name: str) -> str:
 
 
 def strip_image_lines(markdown: str) -> str:
-    """
-    Remove markdown image lines like:
-    ![alt](file.jpg)
-    """
     return re.sub(r"\n!\[.*?\]\(.*?\)\n?", "\n", markdown).strip() + "\n"
 
 
@@ -61,46 +57,74 @@ def get_recipe(name: str):
         _, res = dbx.files_download(recipe_md_path(name))
         return res.content.decode("utf-8")
     except dropbox.exceptions.ApiError:
-        raise HTTPException(status_code=404, detail="Recipe not found")
+        raise HTTPException(status_code=404)
 
 
-# ---------- Save recipe + optional photo ----------
+# ---------- Save / Edit / Rename recipe ----------
 
 @app.post("/api/recipes")
 async def save_recipe(
     name: str = Form(...),
     markdown: str = Form(...),
+    original_name: str | None = Form(None),
     photo: UploadFile | None = None,
 ):
+    # Rename if needed
+    if original_name and original_name != name:
+        old_md = recipe_md_path(original_name)
+        new_md = recipe_md_path(name)
+        old_folder = recipe_folder(original_name)
+        new_folder = recipe_folder(name)
+
+        # Ensure new does not already exist
+        try:
+            dbx.files_get_metadata(new_md)
+            raise HTTPException(status_code=400, detail="Recipe name already exists")
+        except dropbox.exceptions.ApiError:
+            pass
+
+        # Copy markdown
+        dbx.files_copy_v2(old_md, new_md)
+
+        # Copy image folder if present
+        try:
+            dbx.files_copy_v2(old_folder, new_folder)
+        except Exception:
+            pass
+
+        # Delete old
+        dbx.files_delete_v2(old_md)
+        try:
+            dbx.files_delete_v2(old_folder)
+        except Exception:
+            pass
+
     md_path = recipe_md_path(name)
     folder_path = recipe_folder(name)
 
-    # If replacing photo, clean markdown first
+    # Clean markdown if replacing image
     if photo:
         markdown = strip_image_lines(markdown)
 
-    # Save markdown (clean or untouched)
+    # Save markdown
     dbx.files_upload(
         markdown.encode("utf-8"),
         md_path,
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Handle photo replacement
+    # Replace photo if present
     if photo:
-        # Delete existing images in folder
         try:
             result = dbx.files_list_folder(folder_path)
             for entry in result.entries:
                 dbx.files_delete_v2(entry.path_lower)
         except Exception:
-            # Folder may not exist yet
             try:
                 dbx.files_create_folder_v2(folder_path)
             except Exception:
                 pass
 
-        # Upload new image
         img_path = f"{folder_path}/{photo.filename}"
         content = await photo.read()
 
@@ -110,7 +134,6 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
-        # Append image reference to markdown
         image_line = f"\n\n![{photo.filename}]({photo.filename})\n"
         _, res = dbx.files_download(md_path)
 
@@ -142,16 +165,12 @@ def delete_recipe(name: str):
     return {"status": "deleted"}
 
 
-# ---------- Serve recipe photos ----------
+# ---------- Serve photos ----------
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
-    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
     try:
-        _, res = dbx.files_download(path)
-        return StreamingResponse(
-            io.BytesIO(res.content),
-            media_type="image/jpeg",
-        )
+        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
+        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404)
