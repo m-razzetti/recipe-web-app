@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import dropbox
+import dropbox.files
 import os
 import io
 import re
@@ -39,7 +40,7 @@ def strip_image_lines(markdown: str) -> str:
     Remove markdown image lines like:
     ![alt](file.jpg)
     """
-    return re.sub(r"\n*\!\[.*?\]\(.*?\)\n*", "\n\n", markdown).strip() + "\n"
+    return re.sub(r"\n!\[.*?\]\(.*?\)\n?", "\n", markdown).strip() + "\n"
 
 
 # ---------- List recipes ----------
@@ -48,9 +49,7 @@ def strip_image_lines(markdown: str) -> str:
 def list_recipes():
     result = dbx.files_list_folder(RECIPES_ROOT)
     return sorted(
-        entry.name[:-3]
-        for entry in result.entries
-        if entry.name.endswith(".md")
+        e.name[:-3] for e in result.entries if e.name.endswith(".md")
     )
 
 
@@ -65,7 +64,7 @@ def get_recipe(name: str):
         raise HTTPException(status_code=404, detail="Recipe not found")
 
 
-# ---------- Save / Edit recipe + optional photo ----------
+# ---------- Save recipe + optional photo ----------
 
 @app.post("/api/recipes")
 async def save_recipe(
@@ -76,27 +75,32 @@ async def save_recipe(
     md_path = recipe_md_path(name)
     folder_path = recipe_folder(name)
 
-    # If replacing photo, remove old image folder + image refs
+    # If replacing photo, clean markdown first
     if photo:
-        try:
-            dbx.files_delete_v2(folder_path)
-        except dropbox.exceptions.ApiError:
-            pass  # folder may not exist
-
-        # Strip old image markdown
         markdown = strip_image_lines(markdown)
 
-    # Save markdown (base version)
+    # Save markdown (clean or untouched)
     dbx.files_upload(
         markdown.encode("utf-8"),
         md_path,
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Save new photo if present
+    # Handle photo replacement
     if photo:
-        dbx.files_create_folder_v2(folder_path)
+        # Delete existing images in folder
+        try:
+            result = dbx.files_list_folder(folder_path)
+            for entry in result.entries:
+                dbx.files_delete_v2(entry.path_lower)
+        except Exception:
+            # Folder may not exist yet
+            try:
+                dbx.files_create_folder_v2(folder_path)
+            except Exception:
+                pass
 
+        # Upload new image
         img_path = f"{folder_path}/{photo.filename}"
         content = await photo.read()
 
@@ -106,11 +110,11 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
-        # Append new image reference
+        # Append image reference to markdown
         image_line = f"\n\n![{photo.filename}]({photo.filename})\n"
-
         _, res = dbx.files_download(md_path)
-        updated_md = res.content.decode("utf-8") + image_line
+
+        updated_md = res.content.decode("utf-8").rstrip() + image_line
 
         dbx.files_upload(
             updated_md.encode("utf-8"),
@@ -127,12 +131,12 @@ async def save_recipe(
 def delete_recipe(name: str):
     try:
         dbx.files_delete_v2(recipe_md_path(name))
-    except dropbox.exceptions.ApiError:
-        raise HTTPException(status_code=404)
+    except Exception:
+        pass
 
     try:
         dbx.files_delete_v2(recipe_folder(name))
-    except dropbox.exceptions.ApiError:
+    except Exception:
         pass
 
     return {"status": "deleted"}
@@ -142,8 +146,12 @@ def delete_recipe(name: str):
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
+    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
     try:
-        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
-        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
+        _, res = dbx.files_download(path)
+        return StreamingResponse(
+            io.BytesIO(res.content),
+            media_type="image/jpeg",
+        )
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404)
