@@ -114,6 +114,28 @@ async def save_recipe(
     return {"status": "ok"}
 
 
+# ---------- Delete recipe ----------
+
+@app.delete("/api/recipes/{name}")
+def delete_recipe(name: str):
+    md_path = recipe_md_path(name)
+    folder_path = recipe_folder(name)
+
+    # Delete markdown file
+    try:
+        dbx.files_delete_v2(md_path)
+    except dropbox.exceptions.ApiError:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Delete image folder if it exists
+    try:
+        dbx.files_delete_v2(folder_path)
+    except dropbox.exceptions.ApiError:
+        pass  # folder may not exist
+
+    return {"status": "deleted"}
+
+
 # ---------- Serve recipe photos ----------
 
 @app.get("/api/photos/{recipe}/{filename}")
