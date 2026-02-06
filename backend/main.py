@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import dropbox
 import os
 import io
+import re
 
 app = FastAPI()
 
@@ -33,39 +34,38 @@ def recipe_folder(name: str) -> str:
     return f"{RECIPES_ROOT}/{name}"
 
 
+def strip_image_lines(markdown: str) -> str:
+    """
+    Remove markdown image lines like:
+    ![alt](file.jpg)
+    """
+    return re.sub(r"\n*\!\[.*?\]\(.*?\)\n*", "\n\n", markdown).strip() + "\n"
+
+
 # ---------- List recipes ----------
 
 @app.get("/api/recipes")
 def list_recipes():
-    try:
-        result = dbx.files_list_folder(RECIPES_ROOT)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    names = []
-
-    for entry in result.entries:
-        if entry.name.endswith(".md"):
-            names.append(entry.name[:-3])  # strip .md
-
-    return sorted(names)
+    result = dbx.files_list_folder(RECIPES_ROOT)
+    return sorted(
+        entry.name[:-3]
+        for entry in result.entries
+        if entry.name.endswith(".md")
+    )
 
 
 # ---------- Get recipe markdown ----------
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
 def get_recipe(name: str):
-    path = recipe_md_path(name)
-
     try:
-        _, res = dbx.files_download(path)
+        _, res = dbx.files_download(recipe_md_path(name))
         return res.content.decode("utf-8")
-
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
 
-# ---------- Save recipe + optional photo ----------
+# ---------- Save / Edit recipe + optional photo ----------
 
 @app.post("/api/recipes")
 async def save_recipe(
@@ -76,19 +76,26 @@ async def save_recipe(
     md_path = recipe_md_path(name)
     folder_path = recipe_folder(name)
 
-    # Save markdown
+    # If replacing photo, remove old image folder + image refs
+    if photo:
+        try:
+            dbx.files_delete_v2(folder_path)
+        except dropbox.exceptions.ApiError:
+            pass  # folder may not exist
+
+        # Strip old image markdown
+        markdown = strip_image_lines(markdown)
+
+    # Save markdown (base version)
     dbx.files_upload(
         markdown.encode("utf-8"),
         md_path,
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Save photo if present
+    # Save new photo if present
     if photo:
-        try:
-            dbx.files_create_folder_v2(folder_path)
-        except Exception:
-            pass  # folder may already exist
+        dbx.files_create_folder_v2(folder_path)
 
         img_path = f"{folder_path}/{photo.filename}"
         content = await photo.read()
@@ -99,10 +106,10 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
-        # Append image reference to markdown
+        # Append new image reference
         image_line = f"\n\n![{photo.filename}]({photo.filename})\n"
-        _, res = dbx.files_download(md_path)
 
+        _, res = dbx.files_download(md_path)
         updated_md = res.content.decode("utf-8") + image_line
 
         dbx.files_upload(
@@ -118,20 +125,15 @@ async def save_recipe(
 
 @app.delete("/api/recipes/{name}")
 def delete_recipe(name: str):
-    md_path = recipe_md_path(name)
-    folder_path = recipe_folder(name)
-
-    # Delete markdown file
     try:
-        dbx.files_delete_v2(md_path)
+        dbx.files_delete_v2(recipe_md_path(name))
     except dropbox.exceptions.ApiError:
-        raise HTTPException(status_code=404, detail="Recipe not found")
+        raise HTTPException(status_code=404)
 
-    # Delete image folder if it exists
     try:
-        dbx.files_delete_v2(folder_path)
+        dbx.files_delete_v2(recipe_folder(name))
     except dropbox.exceptions.ApiError:
-        pass  # folder may not exist
+        pass
 
     return {"status": "deleted"}
 
@@ -140,13 +142,8 @@ def delete_recipe(name: str):
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
-    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
-
     try:
-        _, res = dbx.files_download(path)
-        return StreamingResponse(
-            io.BytesIO(res.content),
-            media_type="image/jpeg",
-        )
+        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
+        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404)
