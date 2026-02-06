@@ -3,297 +3,181 @@
 <head>
   <meta charset="UTF-8" />
   <title>Recipes</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-  <style>
-    :root {
-      --bg: #f5f6f8;
-      --card: #ffffff;
-      --border: #e5e7eb;
-      --primary: #2563eb;
-      --danger: #dc2626;
-      --text: #111827;
-      --muted: #6b7280;
-      --radius: 12px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .layout {
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Sidebar */
-
-    .sidebar {
-      width: 320px;
-      background: var(--card);
-      border-right: 1px solid var(--border);
-      padding: 16px;
-      overflow-y: auto;
-    }
-
-    .recipe-list {
-      list-style: none;
-      padding: 0;
-      margin: 0 0 16px 0;
-    }
-
-    .recipe-list li {
-      padding: 10px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    .recipe-list li:hover {
-      background: #f0f2f5;
-    }
-
-    .recipe-list li.active {
-      background: #e0e7ff;
-      font-weight: 600;
-    }
-
-    /* Editor */
-
-    .editor {
-      border-top: 1px solid var(--border);
-      padding-top: 16px;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      font-size: 14px;
-    }
-
-    textarea {
-      min-height: 140px;
-      resize: vertical;
-    }
-
-    .buttons {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    button.primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    button.danger {
-      background: var(--danger);
-      color: white;
-    }
-
-    button.secondary {
-      background: #e5e7eb;
-    }
-
-    /* Content */
-
-    .content {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-    }
-
-    .content-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 24px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    img {
-      max-width: 100%;
-      border-radius: 8px;
-      margin-top: 16px;
-    }
-
-    /* Mobile */
-
-    @media (max-width: 768px) {
-      .layout {
-        flex-direction: column;
-      }
-
-      .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .content {
-        padding: 12px;
-      }
-
-      .content-card {
-        padding: 16px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-<div class="layout">
+<div class="app">
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <h2>Recipes</h2>
-    <ul id="recipe-list" class="recipe-list"></ul>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <h2>Library</h2>
 
-    <div class="editor">
-      <input id="recipe-name" placeholder="Recipe name" />
-      <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
-      <input type="file" id="photo-input" />
+    <h3>Paste Markdown</h3>
+    <input id="recipe-name" placeholder="Recipe name" />
+    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
 
-      <div class="buttons">
-        <button class="primary" onclick="saveRecipe()">Save</button>
-      </div>
+    <input type="file" id="photo-input" />
+    <button onclick="saveRecipe()">Save Recipe</button>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="content">
+
+    <!-- GRID VIEW -->
+    <div id="grid-view">
+      <div id="recipe-grid" class="grid"></div>
     </div>
-  </div>
 
-  <!-- Content -->
-  <div class="content">
-    <div class="content-card">
-      <div class="buttons" style="justify-content:flex-end; margin-bottom:12px;">
-        <button id="edit-btn" class="secondary" style="display:none" onclick="editCurrentRecipe()">Edit</button>
-        <button id="delete-btn" class="danger" style="display:none" onclick="deleteCurrentRecipe()">Delete</button>
+    <!-- RECIPE VIEW -->
+    <div id="recipe-view" style="display:none">
+      <div style="display:flex; gap:8px; margin-bottom:12px">
+        <button onclick="showGrid()">← Back</button>
+        <button onclick="editCurrentRecipe()">Edit</button>
       </div>
 
-      <div id="recipe-content"></div>
+      <div id="recipe-content" class="recipe"></div>
     </div>
-  </div>
+
+  </main>
 
 </div>
 
 <script>
 const API = "http://192.168.1.3:9001/api";
 let currentRecipe = null;
-let editingOriginalName = null;
 
-/* Helpers */
+/* ---------- View helpers ---------- */
 
-function normalizeMarkdown(text) {
-  return text.replace(/\uFEFF/g, "").replace(/\r\n/g, "\n");
+function showGrid() {
+  document.getElementById("recipe-view").style.display = "none";
+  document.getElementById("grid-view").style.display = "block";
+  currentRecipe = null;
 }
 
-function rewriteImageUrls(html, recipeName) {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-
-  div.querySelectorAll("img").forEach(img => {
-    const src = img.getAttribute("src");
-    if (!src || src.startsWith("http")) return;
-    img.src = `${API}/photos/${encodeURIComponent(recipeName)}/${encodeURIComponent(src)}`;
-  });
-
-  return div.innerHTML;
+function showRecipe() {
+  document.getElementById("grid-view").style.display = "none";
+  document.getElementById("recipe-view").style.display = "block";
 }
 
-/* Load recipes */
+/* ---------- Load recipe cards ---------- */
 
 async function loadRecipes() {
   const res = await fetch(`${API}/recipes`);
   const recipes = await res.json();
-  const list = document.getElementById("recipe-list");
-  list.innerHTML = "";
 
-  recipes.forEach(name => {
-    const li = document.createElement("li");
-    li.textContent = name;
-    li.className = name === currentRecipe ? "active" : "";
-    li.onclick = () => loadRecipe(name);
-    list.appendChild(li);
+  const grid = document.getElementById("recipe-grid");
+  grid.innerHTML = "";
+
+  for (const name of recipes) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const image = document.createElement("div");
+    image.className = "card-image";
+
+    const mdRes = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
+    const md = await mdRes.text();
+    const match = md.match(/!\[[^\]]*]\(([^)]+)\)/);
+
+    if (match) {
+      const filename = match[1];
+      image.style.backgroundImage =
+        `url('${API}/photos/${encodeURIComponent(name)}/${encodeURIComponent(filename)}')`;
+    }
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = name;
+
+    card.appendChild(image);
+    card.appendChild(title);
+
+    card.onclick = () => loadRecipe(name);
+    grid.appendChild(card);
+  }
+}
+
+/* ---------- Load single recipe ---------- */
+
+async function loadRecipe(name) {
+  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
+  const markdown = await res.text();
+
+  currentRecipe = name;
+
+  document.getElementById("recipe-content").innerHTML =
+    marked.parse(markdown);
+
+  rewriteImages(name);
+  showRecipe();
+}
+
+function rewriteImages(recipe) {
+  document.querySelectorAll("#recipe-content img").forEach(img => {
+    const filename = img.getAttribute("src").split("/").pop();
+    img.src =
+      `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(filename)}`;
   });
 }
 
-/* Load recipe */
-
-async function loadRecipe(name) {
-  currentRecipe = name;
-  editingOriginalName = null;
-
-  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-  const md = await res.text();
-  const html = rewriteImageUrls(marked.parse(normalizeMarkdown(md)), name);
-
-  document.getElementById("recipe-content").innerHTML = html;
-  document.getElementById("edit-btn").style.display = "inline-block";
-  document.getElementById("delete-btn").style.display = "inline-block";
-
-  loadRecipes();
-}
-
-/* Edit */
+/* ---------- Edit recipe ---------- */
 
 async function editCurrentRecipe() {
+  if (!currentRecipe) return;
+
   const res = await fetch(`${API}/recipes/${encodeURIComponent(currentRecipe)}`);
-  document.getElementById("recipe-name").value = currentRecipe;
-  document.getElementById("recipe-markdown").value = await res.text();
-  editingOriginalName = currentRecipe;
+  const markdown = await res.text();
+
+  recipeName.value = currentRecipe;
+  recipeMarkdown.value = markdown;
+  photoInput.value = "";
+
+  showGrid();
 }
 
-/* Save */
+/* ---------- Save recipe ---------- */
 
 async function saveRecipe() {
-  const name = document.getElementById("recipe-name").value.trim();
-  const markdown = document.getElementById("recipe-markdown").value;
-  const photoInput = document.getElementById("photo-input");
+  const name = recipeName.value.trim();
+  const markdown = recipeMarkdown.value;
+  const photo = photoInput.files[0];
 
-  if (!name || !markdown) return alert("Name and markdown required");
+  if (!name || !markdown) {
+    alert("Name and markdown required");
+    return;
+  }
 
   const form = new FormData();
   form.append("name", name);
   form.append("markdown", markdown);
-  if (editingOriginalName) form.append("original_name", editingOriginalName);
-  if (photoInput.files.length) form.append("photo", photoInput.files[0]);
+  if (photo) form.append("photo", photo);
 
-  await fetch(`${API}/recipes`, { method: "POST", body: form });
+  const res = await fetch(`${API}/recipes`, {
+    method: "POST",
+    body: form
+  });
 
-  editingOriginalName = null;
+  if (!res.ok) {
+    alert("Save failed");
+    return;
+  }
+
+  recipeName.value = "";
+  recipeMarkdown.value = "";
   photoInput.value = "";
-  loadRecipes();
-  loadRecipe(name);
-}
 
-/* Delete */
-
-async function deleteCurrentRecipe() {
-  if (!confirm("Delete this recipe permanently?")) return;
-  await fetch(`${API}/recipes/${encodeURIComponent(currentRecipe)}`, { method: "DELETE" });
-  currentRecipe = null;
-  document.getElementById("recipe-content").innerHTML = "";
-  document.getElementById("edit-btn").style.display = "none";
-  document.getElementById("delete-btn").style.display = "none";
+  showGrid();
   loadRecipes();
 }
+
+/* ---------- Init ---------- */
+
+const recipeName = document.getElementById("recipe-name");
+const recipeMarkdown = document.getElementById("recipe-markdown");
+const photoInput = document.getElementById("photo-input");
 
 loadRecipes();
 </script>
