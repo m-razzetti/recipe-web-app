@@ -21,7 +21,6 @@ dbx = dropbox.Dropbox(
 )
 
 RECIPES_ROOT = "/recipes"
-IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
 
 # ---------- Helpers ----------
@@ -44,10 +43,9 @@ def list_recipes():
         raise HTTPException(status_code=500, detail=str(e))
 
     names = []
-
     for entry in result.entries:
         if entry.name.endswith(".md"):
-            names.append(entry.name[:-3])  # strip .md
+            names.append(entry.name[:-3])
 
     return sorted(names)
 
@@ -56,10 +54,8 @@ def list_recipes():
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
 def get_recipe(name: str):
-    path = recipe_md_path(name)
-
     try:
-        _, res = dbx.files_download(path)
+        _, res = dbx.files_download(recipe_md_path(name))
         return res.content.decode("utf-8")
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -83,24 +79,18 @@ async def save_recipe(
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Save photo if present
+    # Handle photo
     if photo:
-        try:
-            dbx.files_create_folder_v2(folder_path)
-        except Exception:
-            pass  # folder may already exist
-
-        # Remove existing images
         try:
             result = dbx.files_list_folder(folder_path)
             for entry in result.entries:
-                if entry.name.lower().endswith(IMAGE_EXTS):
-                    dbx.files_delete_v2(entry.path_lower)
+                if entry.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    dbx.files_delete_v2(f"{folder_path}/{entry.name}")
         except Exception:
-            pass
+            dbx.files_create_folder_v2(folder_path)
 
-        img_path = f"{folder_path}/{photo.filename}"
         content = await photo.read()
+        img_path = f"{folder_path}/{photo.filename}"
 
         dbx.files_upload(
             content,
@@ -108,40 +98,35 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
-        # Append image reference to markdown if missing
+        # Append image reference if missing
         _, res = dbx.files_download(md_path)
-        md_text = res.content.decode("utf-8")
+        text = res.content.decode("utf-8")
 
-        image_line = f"\n\n![{photo.filename}]({photo.filename})\n"
-        if image_line.strip() not in md_text:
-            md_text += image_line
+        image_line = f"![{photo.filename}]({photo.filename})"
+        if image_line not in text:
+            text += f"\n\n{image_line}\n"
 
-            dbx.files_upload(
-                md_text.encode("utf-8"),
-                md_path,
-                mode=dropbox.files.WriteMode.overwrite,
-            )
+        dbx.files_upload(
+            text.encode("utf-8"),
+            md_path,
+            mode=dropbox.files.WriteMode.overwrite,
+        )
 
     return {"status": "ok"}
 
 
-# ---------- Serve recipe photos ----------
+# ---------- Serve photos ----------
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
-    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
-
     try:
-        _, res = dbx.files_download(path)
-        return StreamingResponse(
-            io.BytesIO(res.content),
-            media_type="image/jpeg",
-        )
+        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
+        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404)
 
 
-# ---------- Recipe cover image (for tiles) ----------
+# ---------- Get cover image for tiles ----------
 
 @app.get("/api/recipes/{name}/cover")
 def get_recipe_cover(name: str):
@@ -149,13 +134,11 @@ def get_recipe_cover(name: str):
 
     try:
         result = dbx.files_list_folder(folder)
-    except Exception:
+    except dropbox.exceptions.ApiError:
         return {"url": None}
 
     for entry in result.entries:
-        if entry.name.lower().endswith(IMAGE_EXTS):
-            return {
-                "url": f"/api/photos/{name}/{entry.name}"
-            }
+        if entry.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            return {"url": f"/photos/{name}/{entry.name}"}
 
     return {"url": None}
