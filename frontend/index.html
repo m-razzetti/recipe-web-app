@@ -11,99 +11,144 @@
 <body>
 <div class="layout">
 
-  <!-- LEFT SIDEBAR -->
+  <!-- SIDEBAR -->
   <aside class="sidebar">
     <h2>Library</h2>
     <input class="search" placeholder="Search (coming soon)" />
 
-    <button class="primary" onclick="openImport()">➕ Import Recipe</button>
+    <div class="tags">
+      <h4>Tags</h4>
+      <ul id="tag-list"></ul>
+    </div>
+
+    <button class="primary" onclick="openImport()">+ Import Recipe</button>
   </aside>
 
-  <!-- MAIN CONTENT -->
+  <!-- MAIN -->
   <main class="content">
-    <div id="recipe-grid" class="grid"></div>
+    <div id="view"></div>
   </main>
 
+</div>
+
+<!-- IMPORT / EDIT MODAL -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <h3 id="modal-title">Import Recipe</h3>
+
+    <input id="recipe-name" placeholder="Recipe name" />
+    <input id="recipe-tags" placeholder="Tags (comma separated)" />
+    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
+
+    <input type="file" id="photo-input" />
+
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveRecipe()">Save</button>
+    </div>
+  </div>
 </div>
 
 <script>
 const API = "http://192.168.1.3:9001/api";
 
-/* ---------- Ensure grid exists ---------- */
+let allRecipes = [];
+let activeTag = null;
+let editingRecipe = null;
 
-function ensureGridView() {
-  const content = document.querySelector(".content");
-  let grid = document.getElementById("recipe-grid");
+/* ---------- Load ---------- */
 
-  // If we're currently in import/edit/recipe view, the grid container is gone.
-  if (!grid) {
-    content.innerHTML = `<div id="recipe-grid" class="grid"></div>`;
-    grid = document.getElementById("recipe-grid");
-  }
-
-  return grid;
+async function loadRecipes() {
+  const res = await fetch(`${API}/recipes`);
+  allRecipes = await res.json();
+  renderTags();
+  renderGrid();
 }
 
-/* ---------- Cover image helper ---------- */
+/* ---------- Tags ---------- */
 
-async function getCoverImage(recipe) {
-  try {
-    const res = await fetch(`${API}/recipes/${encodeURIComponent(recipe)}/cover`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.url) return null;
-    return API + data.url;
-  } catch {
-    return null;
-  }
+function renderTags() {
+  const set = new Set();
+
+  allRecipes.forEach(r => {
+    (r.tags || []).forEach(t => set.add(t));
+  });
+
+  const ul = document.getElementById("tag-list");
+  ul.innerHTML = "";
+
+  const all = document.createElement("li");
+  all.textContent = "All Recipes";
+  all.onclick = () => {
+    activeTag = null;
+    renderGrid();
+  };
+  ul.appendChild(all);
+
+  [...set].sort().forEach(tag => {
+    const li = document.createElement("li");
+    li.textContent = tag;
+    li.onclick = () => {
+      activeTag = tag;
+      renderGrid();
+    };
+    ul.appendChild(li);
+  });
 }
 
 /* ---------- Grid ---------- */
 
-async function loadRecipes() {
-  const grid = ensureGridView();
+function renderGrid() {
+  const view = document.getElementById("view");
+  view.innerHTML = "";
 
-  const res = await fetch(`${API}/recipes`);
-  const recipes = await res.json();
+  const grid = document.createElement("div");
+  grid.className = "grid";
 
-  grid.innerHTML = "";
+  const visible = activeTag
+    ? allRecipes.filter(r => (r.tags || []).includes(activeTag))
+    : allRecipes;
 
-  for (const name of recipes) {
+  for (const r of visible) {
     const card = document.createElement("div");
     card.className = "card";
 
     const img = document.createElement("div");
     img.className = "card-image";
 
-    const cover = await getCoverImage(name);
-    if (cover) {
-      img.style.backgroundImage = `url('${cover}')`;
+    if (r.cover) {
+      img.style.backgroundImage =
+        `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
     }
 
     const title = document.createElement("div");
     title.className = "card-title";
-    title.textContent = name;
+    title.textContent = r.name;
 
     card.appendChild(img);
     card.appendChild(title);
 
-    card.onclick = () => loadRecipe(name);
+    card.onclick = () => openRecipe(r.name);
+
     grid.appendChild(card);
   }
+
+  view.appendChild(grid);
 }
 
-/* ---------- View recipe ---------- */
+/* ---------- Recipe View ---------- */
 
-async function loadRecipe(name) {
+async function openRecipe(name) {
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-  const markdown = await res.text();
+  const md = await res.text();
+  const html = marked.parse(md);
 
-  const html = marked.parse(markdown);
+  const view = document.getElementById("view");
 
-  document.querySelector(".content").innerHTML = `
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+  view.innerHTML = `
+    <div class="recipe-header">
       <button onclick="loadRecipes()">← Back</button>
-      <button onclick="openEdit('${escapeHtmlAttr(name)}')">✏️ Edit</button>
+      <button onclick="editRecipe('${name}')">Edit</button>
     </div>
     <div class="recipe">${html}</div>
   `;
@@ -113,60 +158,50 @@ async function loadRecipe(name) {
 
 function rewriteImages(recipe) {
   document.querySelectorAll(".recipe img").forEach(img => {
-    const src = img.getAttribute("src") || "";
-    if (src.startsWith("http") || src.startsWith("data:")) return;
-
-    const filename = src.split("/").pop();
-    img.src = `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(filename)}`;
+    const file = img.getAttribute("src").split("/").pop();
+    img.src = `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(file)}`;
   });
 }
 
-/* ---------- Import / Edit ---------- */
+/* ---------- Modal ---------- */
 
 function openImport() {
-  document.querySelector(".content").innerHTML = `
-    <h2>Import Recipe</h2>
-    <input id="recipe-name" placeholder="Recipe name" />
-    <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
-    <input type="file" id="photo-input" />
-    <div style="display:flex; gap:8px; margin-top:10px;">
-      <button class="primary" onclick="saveRecipe()">Save</button>
-      <button onclick="loadRecipes()">Cancel</button>
-    </div>
-  `;
+  editingRecipe = null;
+  modalTitle.textContent = "Import Recipe";
+  recipeName.value = "";
+  recipeTags.value = "";
+  recipeMarkdown.value = "";
+  photoInput.value = "";
+  modal.classList.remove("hidden");
 }
 
-async function openEdit(name) {
-  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-  const markdown = await res.text();
+async function editRecipe(name) {
+  editingRecipe = name;
+  modalTitle.textContent = "Edit Recipe";
 
-  document.querySelector(".content").innerHTML = `
-    <h2>Edit Recipe</h2>
-    <input id="recipe-name" value="${escapeHtmlAttr(name)}" />
-    <textarea id="recipe-markdown">${escapeHtmlText(markdown)}</textarea>
-    <input type="file" id="photo-input" />
-    <div style="display:flex; gap:8px; margin-top:10px;">
-      <button class="primary" onclick="saveRecipe()">Save</button>
-      <button onclick="loadRecipes()">Cancel</button>
-    </div>
-  `;
+  const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
+  const md = await res.text();
+
+  recipeName.value = name;
+  recipeMarkdown.value = md.replace(/^Tags:.*\n+/m, "");
+
+  const recipe = allRecipes.find(r => r.name === name);
+  recipeTags.value = recipe?.tags.join(", ") || "";
+
+  modal.classList.remove("hidden");
+}
+
+function closeModal() {
+  modal.classList.add("hidden");
 }
 
 /* ---------- Save ---------- */
 
 async function saveRecipe() {
-  const nameEl = document.getElementById("recipe-name");
-  const mdEl = document.getElementById("recipe-markdown");
-  const photoEl = document.getElementById("photo-input");
-
-  if (!nameEl || !mdEl) {
-    alert("Missing form fields (UI not loaded).");
-    return;
-  }
-
-  const name = nameEl.value.trim();
-  const markdown = mdEl.value;
-  const photo = photoEl?.files?.[0];
+  const name = recipeName.value.trim();
+  const markdown = recipeMarkdown.value;
+  const tags = recipeTags.value;
+  const photo = photoInput.files[0];
 
   if (!name || !markdown) {
     alert("Name and markdown required");
@@ -176,6 +211,7 @@ async function saveRecipe() {
   const form = new FormData();
   form.append("name", name);
   form.append("markdown", markdown);
+  form.append("tags", tags);
   if (photo) form.append("photo", photo);
 
   const res = await fetch(`${API}/recipes`, {
@@ -188,27 +224,18 @@ async function saveRecipe() {
     return;
   }
 
+  closeModal();
   loadRecipes();
 }
 
-/* ---------- tiny HTML safety helpers ---------- */
+/* ---------- Init ---------- */
 
-function escapeHtmlAttr(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function escapeHtmlText(str) {
-  // for textarea innerHTML
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modal-title");
+const recipeName = document.getElementById("recipe-name");
+const recipeTags = document.getElementById("recipe-tags");
+const recipeMarkdown = document.getElementById("recipe-markdown");
+const photoInput = document.getElementById("photo-input");
 
 loadRecipes();
 </script>

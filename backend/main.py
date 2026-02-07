@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import dropbox
 import os
 import io
+import re
 
 app = FastAPI()
 
@@ -21,6 +22,7 @@ dbx = dropbox.Dropbox(
 )
 
 RECIPES_ROOT = "/recipes"
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
 
 # ---------- Helpers ----------
@@ -33,21 +35,52 @@ def recipe_folder(name: str) -> str:
     return f"{RECIPES_ROOT}/{name}"
 
 
+def extract_tags(markdown: str) -> list[str]:
+    match = re.search(r"^Tags:\s*(.+)$", markdown, re.MULTILINE)
+    if not match:
+        return []
+    return [t.strip() for t in match.group(1).split(",") if t.strip()]
+
+
+def strip_existing_tags(markdown: str) -> str:
+    return re.sub(r"^Tags:.*\n+", "", markdown, flags=re.MULTILINE)
+
+
+def find_cover_image(name: str) -> str | None:
+    """Return first image filename in recipe folder, if any"""
+    try:
+        result = dbx.files_list_folder(recipe_folder(name))
+    except Exception:
+        return None
+
+    for entry in result.entries:
+        if entry.name.lower().endswith(IMAGE_EXTS):
+            return entry.name
+
+    return None
+
+
 # ---------- List recipes ----------
 
 @app.get("/api/recipes")
 def list_recipes():
-    try:
-        result = dbx.files_list_folder(RECIPES_ROOT)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = dbx.files_list_folder(RECIPES_ROOT)
+    recipes = []
 
-    names = []
     for entry in result.entries:
         if entry.name.endswith(".md"):
-            names.append(entry.name[:-3])
+            name = entry.name[:-3]
 
-    return sorted(names)
+            _, res = dbx.files_download(recipe_md_path(name))
+            md = res.content.decode("utf-8")
+
+            recipes.append({
+                "name": name,
+                "tags": extract_tags(md),
+                "cover": find_cover_image(name),
+            })
+
+    return recipes
 
 
 # ---------- Get recipe markdown ----------
@@ -61,54 +94,40 @@ def get_recipe(name: str):
         raise HTTPException(status_code=404, detail="Recipe not found")
 
 
-# ---------- Save recipe + optional photo ----------
+# ---------- Save / Edit recipe ----------
 
 @app.post("/api/recipes")
 async def save_recipe(
     name: str = Form(...),
     markdown: str = Form(...),
+    tags: str = Form(""),
     photo: UploadFile | None = None,
 ):
     md_path = recipe_md_path(name)
     folder_path = recipe_folder(name)
 
-    # Save markdown
+    clean_md = strip_existing_tags(markdown)
+    tag_line = f"Tags: {tags.strip()}\n\n" if tags.strip() else ""
+    final_md = tag_line + clean_md.lstrip()
+
     dbx.files_upload(
-        markdown.encode("utf-8"),
+        final_md.encode("utf-8"),
         md_path,
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Handle photo
     if photo:
         try:
-            result = dbx.files_list_folder(folder_path)
-            for entry in result.entries:
-                if entry.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                    dbx.files_delete_v2(f"{folder_path}/{entry.name}")
-        except Exception:
             dbx.files_create_folder_v2(folder_path)
+        except Exception:
+            pass
 
-        content = await photo.read()
         img_path = f"{folder_path}/{photo.filename}"
+        content = await photo.read()
 
         dbx.files_upload(
             content,
             img_path,
-            mode=dropbox.files.WriteMode.overwrite,
-        )
-
-        # Append image reference if missing
-        _, res = dbx.files_download(md_path)
-        text = res.content.decode("utf-8")
-
-        image_line = f"![{photo.filename}]({photo.filename})"
-        if image_line not in text:
-            text += f"\n\n{image_line}\n"
-
-        dbx.files_upload(
-            text.encode("utf-8"),
-            md_path,
             mode=dropbox.files.WriteMode.overwrite,
         )
 
@@ -119,26 +138,12 @@ async def save_recipe(
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
+    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
     try:
-        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
-        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
+        _, res = dbx.files_download(path)
+        return StreamingResponse(
+            io.BytesIO(res.content),
+            media_type="image/jpeg",
+        )
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404)
-
-
-# ---------- Get cover image for tiles ----------
-
-@app.get("/api/recipes/{name}/cover")
-def get_recipe_cover(name: str):
-    folder = recipe_folder(name)
-
-    try:
-        result = dbx.files_list_folder(folder)
-    except dropbox.exceptions.ApiError:
-        return {"url": None}
-
-    for entry in result.entries:
-        if entry.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-            return {"url": f"/photos/{name}/{entry.name}"}
-
-    return {"url": None}
