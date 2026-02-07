@@ -5,6 +5,8 @@ import dropbox
 import os
 import io
 import re
+import time
+from typing import Dict, List
 
 app = FastAPI()
 
@@ -24,6 +26,10 @@ dbx = dropbox.Dropbox(
 RECIPES_ROOT = "/recipes"
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
+# ---------- In-memory cache ----------
+# name -> { tags: [...], cover: "file.jpg" | None }
+RECIPE_CACHE: Dict[str, Dict] = {}
+
 
 # ---------- Helpers ----------
 
@@ -35,7 +41,7 @@ def recipe_folder(name: str) -> str:
     return f"{RECIPES_ROOT}/{name}"
 
 
-def extract_tags(markdown: str) -> list[str]:
+def extract_tags(markdown: str) -> List[str]:
     match = re.search(r"^Tags:\s*(.+)$", markdown, re.MULTILINE)
     if not match:
         return []
@@ -47,7 +53,6 @@ def strip_existing_tags(markdown: str) -> str:
 
 
 def find_cover_image(name: str) -> str | None:
-    """Return first image filename in recipe folder, if any"""
     try:
         result = dbx.files_list_folder(recipe_folder(name))
     except Exception:
@@ -60,30 +65,62 @@ def find_cover_image(name: str) -> str | None:
     return None
 
 
-# ---------- List recipes ----------
+# ---------- Cache management ----------
+
+def build_recipe_cache():
+    global RECIPE_CACHE
+    RECIPE_CACHE.clear()
+
+    start = time.perf_counter()
+
+    result = dbx.files_list_folder(RECIPES_ROOT)
+
+    for entry in result.entries:
+        if not entry.name.endswith(".md"):
+            continue
+
+        name = entry.name[:-3]
+
+        try:
+            _, res = dbx.files_download(recipe_md_path(name))
+            md = res.content.decode("utf-8")
+        except Exception:
+            continue
+
+        RECIPE_CACHE[name] = {
+            "tags": extract_tags(md),
+            "cover": find_cover_image(name),
+        }
+
+    elapsed = (time.perf_counter() - start) * 1000
+    print(f"[cache] Loaded {len(RECIPE_CACHE)} recipes in {elapsed:.2f} ms")
+
+
+@app.on_event("startup")
+def startup_event():
+    build_recipe_cache()
+
+
+# ---------- API ----------
 
 @app.get("/api/recipes")
 def list_recipes():
-    result = dbx.files_list_folder(RECIPES_ROOT)
-    recipes = []
+    start = time.perf_counter()
 
-    for entry in result.entries:
-        if entry.name.endswith(".md"):
-            name = entry.name[:-3]
+    data = [
+        {
+            "name": name,
+            "tags": meta["tags"],
+            "cover": meta["cover"],
+        }
+        for name, meta in RECIPE_CACHE.items()
+    ]
 
-            _, res = dbx.files_download(recipe_md_path(name))
-            md = res.content.decode("utf-8")
+    elapsed = (time.perf_counter() - start) * 1000
+    print(f"[perf] /api/recipes served in {elapsed:.2f} ms")
 
-            recipes.append({
-                "name": name,
-                "tags": extract_tags(md),
-                "cover": find_cover_image(name),
-            })
+    return data
 
-    return recipes
-
-
-# ---------- Get recipe markdown ----------
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
 def get_recipe(name: str):
@@ -93,8 +130,6 @@ def get_recipe(name: str):
     except dropbox.exceptions.ApiError:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-
-# ---------- Save / Edit recipe ----------
 
 @app.post("/api/recipes")
 async def save_recipe(
@@ -110,12 +145,14 @@ async def save_recipe(
     tag_line = f"Tags: {tags.strip()}\n\n" if tags.strip() else ""
     final_md = tag_line + clean_md.lstrip()
 
+    # Save markdown
     dbx.files_upload(
         final_md.encode("utf-8"),
         md_path,
         mode=dropbox.files.WriteMode.overwrite,
     )
 
+    # Save photo if provided
     if photo:
         try:
             dbx.files_create_folder_v2(folder_path)
@@ -131,10 +168,14 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
+    # Update cache for this recipe only
+    RECIPE_CACHE[name] = {
+        "tags": [t.strip() for t in tags.split(",") if t.strip()],
+        "cover": find_cover_image(name),
+    }
+
     return {"status": "ok"}
 
-
-# ---------- Serve photos ----------
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
