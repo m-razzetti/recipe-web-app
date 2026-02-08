@@ -14,14 +14,19 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <h2>Library</h2>
-    <input class="search" placeholder="Search (coming soon)" />
+
+    <input
+      id="search"
+      class="search"
+      placeholder="Search recipes..."
+    />
 
     <div class="tags">
       <h4>Tags</h4>
       <ul id="tag-list"></ul>
     </div>
 
-    <button class="primary" onclick="openImport()">+ Import Recipe</button>
+    <button class="primary" id="importBtn">+ Import Recipe</button>
   </aside>
 
   <!-- MAIN -->
@@ -31,7 +36,7 @@
 
 </div>
 
-<!-- IMPORT / EDIT MODAL -->
+<!-- MODAL -->
 <div id="modal" class="modal hidden">
   <div class="modal-card">
     <h3 id="modal-title">Import Recipe</h3>
@@ -43,8 +48,8 @@
     <input type="file" id="photo-input" />
 
     <div class="modal-actions">
-      <button onclick="closeModal()">Cancel</button>
-      <button class="primary" onclick="saveRecipe()">Save</button>
+      <button id="cancelBtn">Cancel</button>
+      <button class="primary" id="saveBtn">Save</button>
     </div>
   </div>
 </div>
@@ -54,7 +59,23 @@ const API = "http://192.168.1.3:9001/api";
 
 let allRecipes = [];
 let activeTag = null;
-let editingRecipe = null;
+let searchQuery = "";
+
+/* ---------- Init ---------- */
+
+document.getElementById("search").addEventListener("input", e => {
+  searchQuery = e.target.value.toLowerCase();
+  renderGrid();
+});
+
+document.getElementById("importBtn").addEventListener("click", openImport);
+document.getElementById("cancelBtn").addEventListener("click", closeModal);
+document.getElementById("saveBtn").addEventListener("click", saveRecipe);
+
+document.addEventListener("click", () => {
+  const menu = document.getElementById("recipe-menu");
+  if (menu) menu.classList.add("hidden");
+});
 
 /* ---------- Load ---------- */
 
@@ -69,34 +90,35 @@ async function loadRecipes() {
 
 function renderTags() {
   const set = new Set();
-
-  allRecipes.forEach(r => {
-    (r.tags || []).forEach(t => set.add(t));
-  });
+  allRecipes.forEach(r => (r.tags || []).forEach(t => set.add(t)));
 
   const ul = document.getElementById("tag-list");
   ul.innerHTML = "";
 
   const all = document.createElement("li");
   all.textContent = "All Recipes";
-  all.onclick = () => {
-    activeTag = null;
-    renderGrid();
-  };
+  all.onclick = () => { activeTag = null; renderGrid(); };
   ul.appendChild(all);
 
   [...set].sort().forEach(tag => {
     const li = document.createElement("li");
     li.textContent = tag;
-    li.onclick = () => {
-      activeTag = tag;
-      renderGrid();
-    };
+    li.onclick = () => { activeTag = tag; renderGrid(); };
     ul.appendChild(li);
   });
 }
 
 /* ---------- Grid ---------- */
+
+function recipeMatches(r) {
+  if (activeTag && !(r.tags || []).includes(activeTag)) return false;
+  if (!searchQuery) return true;
+
+  return (
+    r.name.toLowerCase().includes(searchQuery) ||
+    (r.tags || []).join(" ").toLowerCase().includes(searchQuery)
+  );
+}
 
 function renderGrid() {
   const view = document.getElementById("view");
@@ -105,17 +127,13 @@ function renderGrid() {
   const grid = document.createElement("div");
   grid.className = "grid";
 
-  const visible = activeTag
-    ? allRecipes.filter(r => (r.tags || []).includes(activeTag))
-    : allRecipes;
-
-  for (const r of visible) {
+  allRecipes.filter(recipeMatches).forEach(r => {
     const card = document.createElement("div");
     card.className = "card";
+    card.onclick = () => openRecipe(r.name);
 
     const img = document.createElement("div");
     img.className = "card-image";
-
     if (r.cover) {
       img.style.backgroundImage =
         `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
@@ -127,11 +145,8 @@ function renderGrid() {
 
     card.appendChild(img);
     card.appendChild(title);
-
-    card.onclick = () => openRecipe(r.name);
-
     grid.appendChild(card);
-  }
+  });
 
   view.appendChild(grid);
 }
@@ -140,21 +155,79 @@ function renderGrid() {
 
 async function openRecipe(name) {
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-  const md = await res.text();
+  let md = await res.text();
+
+  md = md
+    .replace(/^Tags:.*\n+/im, "")
+    .replace(/^#\s+.*$/gm, "");
+
   const html = marked.parse(md);
+  const recipe = allRecipes.find(r => r.name === name);
+  const tags = recipe?.tags?.join(", ") || "";
 
   const view = document.getElementById("view");
 
   view.innerHTML = `
     <div class="recipe-header">
-      <button onclick="loadRecipes()">← Back</button>
-      <button onclick="editRecipe('${name}')">Edit</button>
+      <button class="icon-btn" id="backBtn">←</button>
+
+      <div class="recipe-header-main">
+        <h1>${name}</h1>
+        ${tags ? `<div class="recipe-meta">Tags: ${tags}</div>` : ""}
+      </div>
+
+      <div class="menu-wrapper">
+        <button class="icon-btn" id="menuBtn">⋯</button>
+        <div id="recipe-menu" class="menu hidden">
+          <div data-action="edit" data-name="${name}">Edit</div>
+          <div class="danger" data-action="delete" data-name="${name}">Delete</div>
+        </div>
+      </div>
     </div>
+
     <div class="recipe">${html}</div>
   `;
 
+  document.getElementById("backBtn").onclick = loadRecipes;
+
+  document.getElementById("menuBtn").onclick = e => {
+    e.stopPropagation();
+    document.getElementById("recipe-menu").classList.toggle("hidden");
+  };
+
+  document.querySelectorAll("#recipe-menu div").forEach(item => {
+    item.onclick = e => {
+      e.stopPropagation();
+      const action = item.dataset.action;
+      const recipeName = item.dataset.name;
+
+      if (action === "edit") editRecipe(recipeName);
+      if (action === "delete") deleteRecipe(recipeName);
+    };
+  });
+
   rewriteImages(name);
 }
+
+/* ---------- Delete ---------- */
+
+async function deleteRecipe(name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+
+  const res = await fetch(
+    `${API}/recipes/${encodeURIComponent(name)}`,
+    { method: "DELETE" }
+  );
+
+  if (!res.ok) {
+    alert("Delete failed");
+    return;
+  }
+
+  loadRecipes();
+}
+
+/* ---------- Images ---------- */
 
 function rewriteImages(recipe) {
   document.querySelectorAll(".recipe img").forEach(img => {
@@ -166,7 +239,6 @@ function rewriteImages(recipe) {
 /* ---------- Modal ---------- */
 
 function openImport() {
-  editingRecipe = null;
   modalTitle.textContent = "Import Recipe";
   recipeName.value = "";
   recipeTags.value = "";
@@ -176,7 +248,6 @@ function openImport() {
 }
 
 async function editRecipe(name) {
-  editingRecipe = name;
   modalTitle.textContent = "Edit Recipe";
 
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
@@ -227,15 +298,6 @@ async function saveRecipe() {
   closeModal();
   loadRecipes();
 }
-
-/* ---------- Init ---------- */
-
-const modal = document.getElementById("modal");
-const modalTitle = document.getElementById("modal-title");
-const recipeName = document.getElementById("recipe-name");
-const recipeTags = document.getElementById("recipe-tags");
-const recipeMarkdown = document.getElementById("recipe-markdown");
-const photoInput = document.getElementById("photo-input");
 
 loadRecipes();
 </script>

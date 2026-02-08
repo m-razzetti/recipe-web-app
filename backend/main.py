@@ -26,8 +26,7 @@ dbx = dropbox.Dropbox(
 RECIPES_ROOT = "/recipes"
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
-# ---------- In-memory cache ----------
-# name -> { tags: [...], cover: "file.jpg" | None }
+# name -> { tags, cover }
 RECIPE_CACHE: Dict[str, Dict] = {}
 
 
@@ -61,26 +60,21 @@ def find_cover_image(name: str) -> str | None:
     for entry in result.entries:
         if entry.name.lower().endswith(IMAGE_EXTS):
             return entry.name
-
     return None
 
 
-# ---------- Cache management ----------
+# ---------- Cache ----------
 
 def build_recipe_cache():
-    global RECIPE_CACHE
     RECIPE_CACHE.clear()
-
     start = time.perf_counter()
 
     result = dbx.files_list_folder(RECIPES_ROOT)
-
     for entry in result.entries:
         if not entry.name.endswith(".md"):
             continue
 
         name = entry.name[:-3]
-
         try:
             _, res = dbx.files_download(recipe_md_path(name))
             md = res.content.decode("utf-8")
@@ -92,8 +86,7 @@ def build_recipe_cache():
             "cover": find_cover_image(name),
         }
 
-    elapsed = (time.perf_counter() - start) * 1000
-    print(f"[cache] Loaded {len(RECIPE_CACHE)} recipes in {elapsed:.2f} ms")
+    print(f"[cache] Loaded {len(RECIPE_CACHE)} recipes in {(time.perf_counter()-start)*1000:.2f} ms")
 
 
 @app.on_event("startup")
@@ -105,21 +98,10 @@ def startup_event():
 
 @app.get("/api/recipes")
 def list_recipes():
-    start = time.perf_counter()
-
-    data = [
-        {
-            "name": name,
-            "tags": meta["tags"],
-            "cover": meta["cover"],
-        }
-        for name, meta in RECIPE_CACHE.items()
+    return [
+        {"name": name, "tags": data["tags"], "cover": data["cover"]}
+        for name, data in RECIPE_CACHE.items()
     ]
-
-    elapsed = (time.perf_counter() - start) * 1000
-    print(f"[perf] /api/recipes served in {elapsed:.2f} ms")
-
-    return data
 
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
@@ -127,8 +109,8 @@ def get_recipe(name: str):
     try:
         _, res = dbx.files_download(recipe_md_path(name))
         return res.content.decode("utf-8")
-    except dropbox.exceptions.ApiError:
-        raise HTTPException(status_code=404, detail="Recipe not found")
+    except Exception:
+        raise HTTPException(status_code=404)
 
 
 @app.post("/api/recipes")
@@ -138,37 +120,27 @@ async def save_recipe(
     tags: str = Form(""),
     photo: UploadFile | None = None,
 ):
-    md_path = recipe_md_path(name)
-    folder_path = recipe_folder(name)
+    md = strip_existing_tags(markdown)
+    final_md = f"Tags: {tags.strip()}\n\n{md.lstrip()}" if tags.strip() else md
 
-    clean_md = strip_existing_tags(markdown)
-    tag_line = f"Tags: {tags.strip()}\n\n" if tags.strip() else ""
-    final_md = tag_line + clean_md.lstrip()
-
-    # Save markdown
     dbx.files_upload(
-        final_md.encode("utf-8"),
-        md_path,
+        final_md.encode(),
+        recipe_md_path(name),
         mode=dropbox.files.WriteMode.overwrite,
     )
 
-    # Save photo if provided
     if photo:
         try:
-            dbx.files_create_folder_v2(folder_path)
+            dbx.files_create_folder_v2(recipe_folder(name))
         except Exception:
             pass
 
-        img_path = f"{folder_path}/{photo.filename}"
-        content = await photo.read()
-
         dbx.files_upload(
-            content,
-            img_path,
+            await photo.read(),
+            f"{recipe_folder(name)}/{photo.filename}",
             mode=dropbox.files.WriteMode.overwrite,
         )
 
-    # Update cache for this recipe only
     RECIPE_CACHE[name] = {
         "tags": [t.strip() for t in tags.split(",") if t.strip()],
         "cover": find_cover_image(name),
@@ -177,14 +149,35 @@ async def save_recipe(
     return {"status": "ok"}
 
 
+# ---------- DELETE RECIPE ----------
+
+@app.delete("/api/recipes/{name}")
+def delete_recipe(name: str):
+    if name not in RECIPE_CACHE:
+        raise HTTPException(status_code=404)
+
+    # delete markdown
+    try:
+        dbx.files_delete_v2(recipe_md_path(name))
+    except Exception:
+        pass
+
+    # delete folder (photos)
+    try:
+        dbx.files_delete_v2(recipe_folder(name))
+    except Exception:
+        pass
+
+    RECIPE_CACHE.pop(name, None)
+    return {"status": "deleted"}
+
+
+# ---------- Photos ----------
+
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
-    path = f"{RECIPES_ROOT}/{recipe}/{filename}"
     try:
-        _, res = dbx.files_download(path)
-        return StreamingResponse(
-            io.BytesIO(res.content),
-            media_type="image/jpeg",
-        )
-    except dropbox.exceptions.ApiError:
+        _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
+        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
+    except Exception:
         raise HTTPException(status_code=404)

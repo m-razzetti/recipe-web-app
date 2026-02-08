@@ -110,13 +110,6 @@ button, input, textarea {
 }
 
 /* --- Recipe view --- */
-.recipe-header {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
 .recipe {
   max-width: 850px;
 }
@@ -126,16 +119,84 @@ button, input, textarea {
   border-radius: 12px;
 }
 
-/* --- Modal overlay --- */
+/* --- Recipe header (refined) --- */
+.recipe-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.recipe-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recipe-header h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.recipe-meta {
+  font-size: 13px;
+  color: #777;
+}
+
+/* --- Icon buttons --- */
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.icon-btn:hover {
+  background: #f1f1f1;
+}
+
+/* --- Menu --- */
+.menu-wrapper {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.12);
+  min-width: 140px;
+  z-index: 50;
+}
+
+.menu div {
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.menu div:hover {
+  background: #f5f5f5;
+}
+
+.menu .danger {
+  color: #d32f2f;
+}
+
+/* --- Modal --- */
 .modal {
   position: fixed;
   inset: 0;
   z-index: 9999;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   background: rgba(0,0,0,.45);
   padding: 18px;
 }
@@ -148,7 +209,6 @@ button, input, textarea {
   width: min(900px, 100%);
   max-height: 85vh;
   overflow: auto;
-
   background: #fff;
   border-radius: 16px;
   padding: 16px;
@@ -183,7 +243,6 @@ button, input, textarea {
   margin-bottom: 12px;
 }
 
-/* --- Modal actions (FIXED) --- */
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -197,7 +256,6 @@ button, input, textarea {
   cursor: pointer;
 }
 
-/* Neutral button (Cancel) */
 .modal-actions button:not(.primary) {
   background: #fff;
   border: 1px solid #d9d9d9;
@@ -207,7 +265,6 @@ button, input, textarea {
   background: #f4f4f4;
 }
 
-/* Primary button (Save) */
 .modal-actions .primary {
   background: #4f46e5;
   color: #fff;
