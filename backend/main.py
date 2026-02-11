@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, Form, HTTPException
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import dropbox
 import os
@@ -26,7 +26,6 @@ dbx = dropbox.Dropbox(
 RECIPES_ROOT = "/recipes"
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
-# name -> { tags, cover }
 RECIPE_CACHE: Dict[str, Dict] = {}
 
 
@@ -51,6 +50,14 @@ def strip_existing_tags(markdown: str) -> str:
     return re.sub(r"^Tags:.*\n+", "", markdown, flags=re.MULTILINE)
 
 
+def has_image_reference(markdown: str, filename: str) -> bool:
+    return f"]({filename})" in markdown
+
+
+def append_image(markdown: str, filename: str) -> str:
+    return f"{markdown.rstrip()}\n\n![]({filename})\n"
+
+
 def find_cover_image(name: str) -> str | None:
     try:
         result = dbx.files_list_folder(recipe_folder(name))
@@ -60,6 +67,7 @@ def find_cover_image(name: str) -> str | None:
     for entry in result.entries:
         if entry.name.lower().endswith(IMAGE_EXTS):
             return entry.name
+
     return None
 
 
@@ -70,11 +78,13 @@ def build_recipe_cache():
     start = time.perf_counter()
 
     result = dbx.files_list_folder(RECIPES_ROOT)
+
     for entry in result.entries:
         if not entry.name.endswith(".md"):
             continue
 
         name = entry.name[:-3]
+
         try:
             _, res = dbx.files_download(recipe_md_path(name))
             md = res.content.decode("utf-8")
@@ -86,7 +96,10 @@ def build_recipe_cache():
             "cover": find_cover_image(name),
         }
 
-    print(f"[cache] Loaded {len(RECIPE_CACHE)} recipes in {(time.perf_counter()-start)*1000:.2f} ms")
+    print(
+        f"[cache] Loaded {len(RECIPE_CACHE)} recipes in "
+        f"{(time.perf_counter() - start) * 1000:.2f} ms"
+    )
 
 
 @app.on_event("startup")
@@ -98,10 +111,12 @@ def startup_event():
 
 @app.get("/api/recipes")
 def list_recipes():
-    return [
-        {"name": name, "tags": data["tags"], "cover": data["cover"]}
-        for name, data in RECIPE_CACHE.items()
-    ]
+    return JSONResponse(
+        content=[
+            {"name": name, "tags": meta["tags"], "cover": meta["cover"]}
+            for name, meta in RECIPE_CACHE.items()
+        ]
+    )
 
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
@@ -120,49 +135,62 @@ async def save_recipe(
     tags: str = Form(""),
     photo: UploadFile | None = None,
 ):
-    md = strip_existing_tags(markdown)
-    final_md = f"Tags: {tags.strip()}\n\n{md.lstrip()}" if tags.strip() else md
+    clean_md = strip_existing_tags(markdown)
+    cover_filename = None
 
-    dbx.files_upload(
-        final_md.encode(),
-        recipe_md_path(name),
-        mode=dropbox.files.WriteMode.overwrite,
-    )
-
-    if photo:
+    # ---------- Handle photo upload ----------
+    if photo and photo.filename:
         try:
             dbx.files_create_folder_v2(recipe_folder(name))
         except Exception:
             pass
 
+        content = await photo.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty photo upload")
+
+        cover_filename = photo.filename
+
         dbx.files_upload(
-            await photo.read(),
-            f"{recipe_folder(name)}/{photo.filename}",
+            content,
+            f"{recipe_folder(name)}/{cover_filename}",
             mode=dropbox.files.WriteMode.overwrite,
         )
 
+        if not has_image_reference(clean_md, cover_filename):
+            clean_md = append_image(clean_md, cover_filename)
+
+    final_md = (
+        f"Tags: {tags.strip()}\n\n{clean_md.lstrip()}"
+        if tags.strip()
+        else clean_md
+    )
+
+    dbx.files_upload(
+        final_md.encode("utf-8"),
+        recipe_md_path(name),
+        mode=dropbox.files.WriteMode.overwrite,
+    )
+
+    # 🔥 IMPORTANT: update cache correctly
     RECIPE_CACHE[name] = {
         "tags": [t.strip() for t in tags.split(",") if t.strip()],
-        "cover": find_cover_image(name),
+        "cover": cover_filename or find_cover_image(name),
     }
 
     return {"status": "ok"}
 
-
-# ---------- DELETE RECIPE ----------
 
 @app.delete("/api/recipes/{name}")
 def delete_recipe(name: str):
     if name not in RECIPE_CACHE:
         raise HTTPException(status_code=404)
 
-    # delete markdown
     try:
         dbx.files_delete_v2(recipe_md_path(name))
     except Exception:
         pass
 
-    # delete folder (photos)
     try:
         dbx.files_delete_v2(recipe_folder(name))
     except Exception:
@@ -172,12 +200,40 @@ def delete_recipe(name: str):
     return {"status": "deleted"}
 
 
-# ---------- Photos ----------
+# ---------- Thumbnails ----------
+
+@app.get("/api/thumbs/{recipe}")
+def get_thumbnail(recipe: str):
+    meta = RECIPE_CACHE.get(recipe)
+    if not meta or not meta.get("cover"):
+        raise HTTPException(status_code=404)
+
+    path = f"{RECIPES_ROOT}/{recipe}/{meta['cover']}"
+
+    try:
+        _, res = dbx.files_get_thumbnail(
+            path,
+            format=dropbox.files.ThumbnailFormat.jpeg,
+            size=dropbox.files.ThumbnailSize.w256h256,
+        )
+
+        return StreamingResponse(
+            io.BytesIO(res.content),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception:
+        raise HTTPException(status_code=404)
+
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str):
     try:
         _, res = dbx.files_download(f"{RECIPES_ROOT}/{recipe}/{filename}")
-        return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
+        return StreamingResponse(
+            io.BytesIO(res.content),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except Exception:
         raise HTTPException(status_code=404)

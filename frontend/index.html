@@ -14,24 +14,19 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <h2>Library</h2>
-
-    <input
-      id="search"
-      class="search"
-      placeholder="Search recipes..."
-    />
+    <input class="search" placeholder="Search" oninput="renderGrid()" />
 
     <div class="tags">
       <h4>Tags</h4>
       <ul id="tag-list"></ul>
     </div>
 
-    <button class="primary" id="importBtn">+ Import Recipe</button>
+    <button class="primary" onclick="openImport()">+ Import Recipe</button>
   </aside>
 
   <!-- MAIN -->
   <main class="content">
-    <div id="view"></div>
+    <div id="recipe-grid" class="grid"></div>
   </main>
 
 </div>
@@ -44,12 +39,11 @@
     <input id="recipe-name" placeholder="Recipe name" />
     <input id="recipe-tags" placeholder="Tags (comma separated)" />
     <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
-
     <input type="file" id="photo-input" />
 
     <div class="modal-actions">
-      <button id="cancelBtn">Cancel</button>
-      <button class="primary" id="saveBtn">Save</button>
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveRecipe()">Save</button>
     </div>
   </div>
 </div>
@@ -59,38 +53,36 @@ const API = "http://192.168.1.3:9001/api";
 
 let allRecipes = [];
 let activeTag = null;
-let searchQuery = "";
+let currentRecipe = null;
+let editingRecipe = null;
 
-/* ---------- Init ---------- */
-
-document.getElementById("search").addEventListener("input", e => {
-  searchQuery = e.target.value.toLowerCase();
-  renderGrid();
-});
-
-document.getElementById("importBtn").addEventListener("click", openImport);
-document.getElementById("cancelBtn").addEventListener("click", closeModal);
-document.getElementById("saveBtn").addEventListener("click", saveRecipe);
-
-document.addEventListener("click", () => {
-  const menu = document.getElementById("recipe-menu");
-  if (menu) menu.classList.add("hidden");
-});
-
-/* ---------- Load ---------- */
+/* =========================
+   LOAD
+========================= */
 
 async function loadRecipes() {
   const res = await fetch(`${API}/recipes`);
   allRecipes = await res.json();
+
+  document.querySelector(".content").innerHTML =
+    `<div id="recipe-grid" class="grid"></div>`;
+
   renderTags();
   renderGrid();
 }
 
-/* ---------- Tags ---------- */
+function goBack() {
+  currentRecipe = null;
+  loadRecipes();
+}
+
+/* =========================
+   TAGS
+========================= */
 
 function renderTags() {
   const set = new Set();
-  allRecipes.forEach(r => (r.tags || []).forEach(t => set.add(t)));
+  allRecipes.forEach(r => r.tags.forEach(t => set.add(t)));
 
   const ul = document.getElementById("tag-list");
   ul.innerHTML = "";
@@ -103,34 +95,34 @@ function renderTags() {
   [...set].sort().forEach(tag => {
     const li = document.createElement("li");
     li.textContent = tag;
-    li.onclick = () => { activeTag = tag; renderGrid(); };
+    li.onclick = () => {
+      activeTag = tag;
+      renderGrid();
+    };
     ul.appendChild(li);
   });
 }
 
-/* ---------- Grid ---------- */
-
-function recipeMatches(r) {
-  if (activeTag && !(r.tags || []).includes(activeTag)) return false;
-  if (!searchQuery) return true;
-
-  return (
-    r.name.toLowerCase().includes(searchQuery) ||
-    (r.tags || []).join(" ").toLowerCase().includes(searchQuery)
-  );
-}
+/* =========================
+   GRID
+========================= */
 
 function renderGrid() {
-  const view = document.getElementById("view");
-  view.innerHTML = "";
+  const grid = document.getElementById("recipe-grid");
+  if (!grid) return;
 
-  const grid = document.createElement("div");
-  grid.className = "grid";
+  grid.innerHTML = "";
+  const q = document.querySelector(".search").value.toLowerCase();
 
-  allRecipes.filter(recipeMatches).forEach(r => {
+  const visible = allRecipes.filter(r => {
+    if (activeTag && !r.tags.includes(activeTag)) return false;
+    if (q && !r.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  for (const r of visible) {
     const card = document.createElement("div");
     card.className = "card";
-    card.onclick = () => openRecipe(r.name);
 
     const img = document.createElement("div");
     img.className = "card-image";
@@ -145,110 +137,88 @@ function renderGrid() {
 
     card.appendChild(img);
     card.appendChild(title);
+    card.onclick = () => openRecipe(r.name);
     grid.appendChild(card);
-  });
-
-  view.appendChild(grid);
+  }
 }
 
-/* ---------- Recipe View ---------- */
+/* =========================
+   HELPERS
+========================= */
+
+function stripTitle(md) {
+  return md.replace(/^# .+\n+/, "");
+}
+
+function splitFirstImage(html) {
+  const match = html.match(/<img[^>]*>/);
+  if (!match) return { image: "", body: html };
+  return {
+    image: match[0],
+    body: html.replace(match[0], "")
+  };
+}
+
+/* =========================
+   RECIPE VIEW
+========================= */
 
 async function openRecipe(name) {
+  currentRecipe = name;
+
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
-  let md = await res.text();
+  const md = await res.text();
 
-  md = md
-    .replace(/^Tags:.*\n+/im, "")
-    .replace(/^#\s+.*$/gm, "");
+  const html = marked.parse(stripTitle(md));
+  const split = splitFirstImage(html);
 
-  const html = marked.parse(md);
   const recipe = allRecipes.find(r => r.name === name);
-  const tags = recipe?.tags?.join(", ") || "";
+  const tags = recipe?.tags || [];
 
-  const view = document.getElementById("view");
-
-  view.innerHTML = `
-    <div class="recipe-header">
-      <button class="icon-btn" id="backBtn">←</button>
-
-      <div class="recipe-header-main">
-        <h1>${name}</h1>
-        ${tags ? `<div class="recipe-meta">Tags: ${tags}</div>` : ""}
-      </div>
-
+  document.querySelector(".content").innerHTML = `
+    <div class="recipe-header no-print">
+      <button class="icon-btn" onclick="goBack()">←</button>
+      <div></div>
       <div class="menu-wrapper">
-        <button class="icon-btn" id="menuBtn">⋯</button>
-        <div id="recipe-menu" class="menu hidden">
-          <div data-action="edit" data-name="${name}">Edit</div>
-          <div class="danger" data-action="delete" data-name="${name}">Delete</div>
+        <button class="icon-btn" onclick="window.print()">🖨</button>
+        <button class="icon-btn" onclick="toggleMenu()">⋯</button>
+        <div id="menu" class="menu hidden">
+          <div onclick="editRecipe(currentRecipe)">Edit</div>
+          <div class="danger" onclick="deleteRecipe()">Delete</div>
         </div>
       </div>
     </div>
 
-    <div class="recipe">${html}</div>
+    <article class="recipe print-card">
+      <div class="print-header print-only">
+        <h1 class="print-title">${name}</h1>
+        ${tags.length ? `<div class="print-tags">Tags: ${tags.join(", ")}</div>` : ""}
+        ${split.image}
+      </div>
+
+      <div class="print-body">
+        ${split.body}
+      </div>
+    </article>
   `;
-
-  document.getElementById("backBtn").onclick = loadRecipes;
-
-  document.getElementById("menuBtn").onclick = e => {
-    e.stopPropagation();
-    document.getElementById("recipe-menu").classList.toggle("hidden");
-  };
-
-  document.querySelectorAll("#recipe-menu div").forEach(item => {
-    item.onclick = e => {
-      e.stopPropagation();
-      const action = item.dataset.action;
-      const recipeName = item.dataset.name;
-
-      if (action === "edit") editRecipe(recipeName);
-      if (action === "delete") deleteRecipe(recipeName);
-    };
-  });
 
   rewriteImages(name);
 }
 
-/* ---------- Delete ---------- */
+/* =========================
+   MENU
+========================= */
 
-async function deleteRecipe(name) {
-  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-
-  const res = await fetch(
-    `${API}/recipes/${encodeURIComponent(name)}`,
-    { method: "DELETE" }
-  );
-
-  if (!res.ok) {
-    alert("Delete failed");
-    return;
-  }
-
-  loadRecipes();
+function toggleMenu() {
+  document.getElementById("menu").classList.toggle("hidden");
 }
 
-/* ---------- Images ---------- */
-
-function rewriteImages(recipe) {
-  document.querySelectorAll(".recipe img").forEach(img => {
-    const file = img.getAttribute("src").split("/").pop();
-    img.src = `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(file)}`;
-  });
-}
-
-/* ---------- Modal ---------- */
-
-function openImport() {
-  modalTitle.textContent = "Import Recipe";
-  recipeName.value = "";
-  recipeTags.value = "";
-  recipeMarkdown.value = "";
-  photoInput.value = "";
-  modal.classList.remove("hidden");
-}
+/* =========================
+   EDIT
+========================= */
 
 async function editRecipe(name) {
-  modalTitle.textContent = "Edit Recipe";
+  editingRecipe = name;
 
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
   const md = await res.text();
@@ -259,14 +229,27 @@ async function editRecipe(name) {
   const recipe = allRecipes.find(r => r.name === name);
   recipeTags.value = recipe?.tags.join(", ") || "";
 
+  modalTitle.textContent = "Edit Recipe";
   modal.classList.remove("hidden");
 }
 
-function closeModal() {
-  modal.classList.add("hidden");
+/* =========================
+   DELETE
+========================= */
+
+async function deleteRecipe() {
+  if (!confirm("Delete this recipe?")) return;
+
+  await fetch(`${API}/recipes/${encodeURIComponent(currentRecipe)}`, {
+    method: "DELETE"
+  });
+
+  goBack();
 }
 
-/* ---------- Save ---------- */
+/* =========================
+   SAVE
+========================= */
 
 async function saveRecipe() {
   const name = recipeName.value.trim();
@@ -285,19 +268,56 @@ async function saveRecipe() {
   form.append("tags", tags);
   if (photo) form.append("photo", photo);
 
-  const res = await fetch(`${API}/recipes`, {
+  await fetch(`${API}/recipes`, {
     method: "POST",
     body: form
   });
 
-  if (!res.ok) {
-    alert("Save failed");
-    return;
-  }
-
+  editingRecipe = null;
   closeModal();
   loadRecipes();
 }
+
+/* =========================
+   IMAGES
+========================= */
+
+function rewriteImages(recipe) {
+  document.querySelectorAll(".recipe img").forEach(img => {
+    const file = img.getAttribute("src").split("/").pop();
+    img.src =
+      `${API}/photos/${encodeURIComponent(recipe)}/${encodeURIComponent(file)}`;
+  });
+}
+
+/* =========================
+   MODAL
+========================= */
+
+function openImport() {
+  editingRecipe = null;
+  modalTitle.textContent = "Import Recipe";
+  recipeName.value = "";
+  recipeTags.value = "";
+  recipeMarkdown.value = "";
+  photoInput.value = "";
+  modal.classList.remove("hidden");
+}
+
+function closeModal() {
+  modal.classList.add("hidden");
+}
+
+/* =========================
+   INIT
+========================= */
+
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modal-title");
+const recipeName = document.getElementById("recipe-name");
+const recipeTags = document.getElementById("recipe-tags");
+const recipeMarkdown = document.getElementById("recipe-markdown");
+const photoInput = document.getElementById("photo-input");
 
 loadRecipes();
 </script>
