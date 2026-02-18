@@ -1,5 +1,9 @@
 FROM nginx:alpine
 
-COPY index.html /usr/share/nginx/html/index.html
-COPY styles.css /usr/share/nginx/html/styles.css
+# Remove default nginx static files
+RUN rm -rf /usr/share/nginx/html/*
 
+# Copy entire frontend folder
+COPY . /usr/share/nginx/html
+
+EXPOSE 80

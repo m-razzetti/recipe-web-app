@@ -1,12 +1,30 @@
 services:
+
   backend:
     build: ./backend
+    container_name: recipes-backend
     ports:
       - "9001:8000"
-    env_file:
-      - .env
+    environment:
+      DROPBOX_APP_KEY: rqzwq45lzaaxi68
+      DROPBOX_APP_SECRET: 3ox1aph7nqhfbno
+      DROPBOX_REFRESH_TOKEN: DzLdclXX7OMAAAAAAAAAAZdMpbZuaM-tRb1lcsqupNWNe-gpuAqOkbZY1e-qvDE4
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
+    container_name: recipes-frontend
     ports:
       - "9002:80"
+    restart: unless-stopped
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: recipes-npm
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "8081:81"
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt

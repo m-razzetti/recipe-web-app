@@ -1,0 +1,73 @@
+/* =========================
+   LAYOUT
+   ========================= */
+.layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+}
+
+.sidebar {
+  padding: 18px;
+  border-right: 1px solid #e6e6e6;
+  background: #f7f7f7;
+}
+
+.sidebar h2 {
+  margin: 0 0 12px;
+}
+
+.search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 14px;
+}
+
+.tags h4 {
+  margin: 10px 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  opacity: .7;
+}
+
+#tag-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+#tag-list li {
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#tag-list li:hover {
+  background: #eaeaea;
+}
+
+.content {
+  padding: 18px;
+  overflow: auto;
+}
+
+/* Header */
+.recipe-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.recipe {
+  max-width: 850px;
+}
+
+.recipe img {
+  max-width: 100%;
+  border-radius: 12px;
+}

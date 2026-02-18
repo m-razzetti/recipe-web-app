@@ -16,3 +16,10 @@ node_modules/
 .env
 .env.*
 update.sh
+
+# Nginx Proxy Manager data
+npm/data/
+npm/letsencrypt/
+
+# Docker volumes
+*.sqlite

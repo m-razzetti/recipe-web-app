@@ -1,0 +1,148 @@
+/* =========================
+   VIEW TOGGLE (Modern)
+========================= */
+
+.view-toggle {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.toggle {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  background: #fff;
+  font-weight: 500;
+  transition: all .2s ease;
+}
+
+.toggle.active {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  color: white;
+  border: none;
+}
+
+.toggle:hover {
+  transform: translateY(-1px);
+}
+
+/* =========================
+   TAG ITEMS
+========================= */
+
+.tag-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.tag-item:hover {
+  background: #f3f4f6;
+}
+
+.tag-delete {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: .6;
+}
+
+.tag-delete:hover {
+  opacity: 1;
+}
+
+/* =========================
+   GRID
+========================= */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+
+.card-image {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  background-color: #f3f4f6;
+}
+
+.card-title {
+  padding: 14px;
+  font-weight: 600;
+}
+
+/* =========================
+   LIST
+========================= */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.list .card {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+}
+
+.list .card-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  margin-right: 14px;
+}
+/* =========================
+   RECIPE HEADER
+========================= */
+
+.recipe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.recipe-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-btn {
+  border: none;
+  background: #f3f4f6;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.icon-btn:hover {
+  background: #e5e7eb;
+}
+
+.icon-btn.danger:hover {
+  background: #fee2e2;
+}

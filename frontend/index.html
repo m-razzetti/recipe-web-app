@@ -1,33 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Recipes</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recipes</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<link rel="stylesheet" href="/css/base.css" />
+<link rel="stylesheet" href="/css/layout.css" />
+<link rel="stylesheet" href="/css/components.css" />
+<link rel="stylesheet" href="/css/modal.css" />
+<link rel="stylesheet" href="/css/print.css" />
+<link rel="stylesheet" href="/css/mobile.css" />
 </head>
 
 <body>
 <div class="layout">
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <h2>Library</h2>
-    <input class="search" placeholder="Search" oninput="renderGrid()" />
+<aside class="sidebar">
+  <h2>Library</h2>
 
-    <div class="tags">
-      <h4>Tags</h4>
-      <ul id="tag-list"></ul>
-    </div>
+  <input class="search" placeholder="Search" oninput="renderGrid()" />
 
-    <button class="primary" onclick="openImport()">+ Import Recipe</button>
-  </aside>
+  <div class="tags">
+    <h4>Tags</h4>
+    <ul id="tag-list"></ul>
+  </div>
 
-  <!-- MAIN -->
-  <main class="content">
-    <div id="recipe-grid" class="grid"></div>
-  </main>
+  <button class="primary" onclick="openImport()">+ Import Recipe</button>
+</aside>
+
+<main class="content">
+  <div class="view-toggle">
+    <button id="gridBtn" class="toggle active" onclick="setView('grid')">Grid</button>
+    <button id="listBtn" class="toggle" onclick="setView('list')">List</button>
+  </div>
+
+  <div id="recipe-grid" class="grid"></div>
+</main>
 
 </div>
 
@@ -49,23 +60,39 @@
 </div>
 
 <script>
-const API = "http://192.168.1.3:9001/api";
+const API = "/api";
 
 let allRecipes = [];
 let activeTag = null;
+let currentView = "grid";
 let currentRecipe = null;
-let editingRecipe = null;
+
+/* =========================
+   UTIL
+========================= */
+
+function showLoading() {
+  document.querySelector(".content").innerHTML =
+    `<div class="loading">Loading…</div>`;
+}
 
 /* =========================
    LOAD
 ========================= */
 
 async function loadRecipes() {
+  showLoading();
+
   const res = await fetch(`${API}/recipes`);
   allRecipes = await res.json();
 
-  document.querySelector(".content").innerHTML =
-    `<div id="recipe-grid" class="grid"></div>`;
+  document.querySelector(".content").innerHTML = `
+    <div class="view-toggle">
+      <button id="gridBtn" class="toggle ${currentView === 'grid' ? 'active' : ''}" onclick="setView('grid')">Grid</button>
+      <button id="listBtn" class="toggle ${currentView === 'list' ? 'active' : ''}" onclick="setView('list')">List</button>
+    </div>
+    <div id="recipe-grid" class="${currentView}"></div>
+  `;
 
   renderTags();
   renderGrid();
@@ -73,6 +100,15 @@ async function loadRecipes() {
 
 function goBack() {
   currentRecipe = null;
+  loadRecipes();
+}
+
+/* =========================
+   VIEW TOGGLE
+========================= */
+
+function setView(view) {
+  currentView = view;
   loadRecipes();
 }
 
@@ -94,17 +130,58 @@ function renderTags() {
 
   [...set].sort().forEach(tag => {
     const li = document.createElement("li");
-    li.textContent = tag;
-    li.onclick = () => {
+    li.className = "tag-item";
+
+    const name = document.createElement("span");
+    name.textContent = tag;
+    name.onclick = () => {
       activeTag = tag;
       renderGrid();
     };
+
+    const del = document.createElement("button");
+    del.className = "tag-delete";
+    del.textContent = "🗑";
+    del.onclick = (e) => {
+      e.stopPropagation();
+      deleteTag(tag);
+    };
+
+    li.appendChild(name);
+    li.appendChild(del);
     ul.appendChild(li);
   });
 }
 
 /* =========================
-   GRID
+   DELETE TAG
+========================= */
+
+async function deleteTag(tag) {
+  if (!confirm(`Delete tag "${tag}" from all recipes?`)) return;
+
+  for (const recipe of allRecipes) {
+    if (recipe.tags.includes(tag)) {
+      const updatedTags = recipe.tags.filter(t => t !== tag).join(", ");
+
+      const res = await fetch(`${API}/recipes/${encodeURIComponent(recipe.name)}`);
+      const md = await res.text();
+      const clean = md.replace(/^Tags:.*\n+/m, "");
+
+      const form = new FormData();
+      form.append("name", recipe.name);
+      form.append("markdown", clean);
+      form.append("tags", updatedTags);
+
+      await fetch(`${API}/recipes`, { method: "POST", body: form });
+    }
+  }
+
+  loadRecipes();
+}
+
+/* =========================
+   GRID / LIST
 ========================= */
 
 function renderGrid() {
@@ -112,6 +189,7 @@ function renderGrid() {
   if (!grid) return;
 
   grid.innerHTML = "";
+
   const q = document.querySelector(".search").value.toLowerCase();
 
   const visible = allRecipes.filter(r => {
@@ -120,12 +198,13 @@ function renderGrid() {
     return true;
   });
 
-  for (const r of visible) {
+  visible.forEach(r => {
     const card = document.createElement("div");
     card.className = "card";
 
     const img = document.createElement("div");
     img.className = "card-image";
+
     if (r.cover) {
       img.style.backgroundImage =
         `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
@@ -138,67 +217,40 @@ function renderGrid() {
     card.appendChild(img);
     card.appendChild(title);
     card.onclick = () => openRecipe(r.name);
+
     grid.appendChild(card);
-  }
+  });
 }
 
 /* =========================
-   HELPERS
-========================= */
-
-function stripTitle(md) {
-  return md.replace(/^# .+\n+/, "");
-}
-
-function splitFirstImage(html) {
-  const match = html.match(/<img[^>]*>/);
-  if (!match) return { image: "", body: html };
-  return {
-    image: match[0],
-    body: html.replace(match[0], "")
-  };
-}
-
-/* =========================
-   RECIPE VIEW
+   OPEN RECIPE
 ========================= */
 
 async function openRecipe(name) {
   currentRecipe = name;
+  showLoading();
 
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
   const md = await res.text();
 
-  const html = marked.parse(stripTitle(md));
-  const split = splitFirstImage(html);
-
+  const html = marked.parse(md.replace(/^Tags:.*\n+/m, ""));
   const recipe = allRecipes.find(r => r.name === name);
   const tags = recipe?.tags || [];
 
   document.querySelector(".content").innerHTML = `
     <div class="recipe-header no-print">
       <button class="icon-btn" onclick="goBack()">←</button>
-      <div></div>
-      <div class="menu-wrapper">
+      <div class="header-actions">
+        <button class="icon-btn" onclick="editRecipe('${name}')">✏️</button>
         <button class="icon-btn" onclick="window.print()">🖨</button>
-        <button class="icon-btn" onclick="toggleMenu()">⋯</button>
-        <div id="menu" class="menu hidden">
-          <div onclick="editRecipe(currentRecipe)">Edit</div>
-          <div class="danger" onclick="deleteRecipe()">Delete</div>
-        </div>
+        <button class="icon-btn danger" onclick="deleteRecipe()">🗑</button>
       </div>
     </div>
 
-    <article class="recipe print-card">
-      <div class="print-header print-only">
-        <h1 class="print-title">${name}</h1>
-        ${tags.length ? `<div class="print-tags">Tags: ${tags.join(", ")}</div>` : ""}
-        ${split.image}
-      </div>
-
-      <div class="print-body">
-        ${split.body}
-      </div>
+    <article class="recipe">
+      <h1>${name}</h1>
+      ${tags.length ? `<div class="recipe-meta">Tags: ${tags.join(", ")}</div>` : ""}
+      ${html}
     </article>
   `;
 
@@ -206,35 +258,27 @@ async function openRecipe(name) {
 }
 
 /* =========================
-   MENU
-========================= */
-
-function toggleMenu() {
-  document.getElementById("menu").classList.toggle("hidden");
-}
-
-/* =========================
    EDIT
 ========================= */
 
 async function editRecipe(name) {
-  editingRecipe = name;
-
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
   const md = await res.text();
 
-  recipeName.value = name;
-  recipeMarkdown.value = md.replace(/^Tags:.*\n+/m, "");
+  document.getElementById("recipe-name").value = name;
+  document.getElementById("recipe-markdown").value =
+    md.replace(/^Tags:.*\n+/m, "");
 
   const recipe = allRecipes.find(r => r.name === name);
-  recipeTags.value = recipe?.tags.join(", ") || "";
+  document.getElementById("recipe-tags").value =
+    recipe?.tags.join(", ") || "";
 
-  modalTitle.textContent = "Edit Recipe";
-  modal.classList.remove("hidden");
+  document.getElementById("modal-title").textContent = "Edit Recipe";
+  document.getElementById("modal").classList.remove("hidden");
 }
 
 /* =========================
-   DELETE
+   DELETE RECIPE
 ========================= */
 
 async function deleteRecipe() {
@@ -268,12 +312,8 @@ async function saveRecipe() {
   form.append("tags", tags);
   if (photo) form.append("photo", photo);
 
-  await fetch(`${API}/recipes`, {
-    method: "POST",
-    body: form
-  });
+  await fetch(`${API}/recipes`, { method: "POST", body: form });
 
-  editingRecipe = null;
   closeModal();
   loadRecipes();
 }
@@ -295,25 +335,22 @@ function rewriteImages(recipe) {
 ========================= */
 
 function openImport() {
-  editingRecipe = null;
-  modalTitle.textContent = "Import Recipe";
+  document.getElementById("modal-title").textContent = "Import Recipe";
   recipeName.value = "";
   recipeTags.value = "";
   recipeMarkdown.value = "";
   photoInput.value = "";
-  modal.classList.remove("hidden");
+  document.getElementById("modal").classList.remove("hidden");
 }
 
 function closeModal() {
-  modal.classList.add("hidden");
+  document.getElementById("modal").classList.add("hidden");
 }
 
 /* =========================
    INIT
 ========================= */
 
-const modal = document.getElementById("modal");
-const modalTitle = document.getElementById("modal-title");
 const recipeName = document.getElementById("recipe-name");
 const recipeTags = document.getElementById("recipe-tags");
 const recipeMarkdown = document.getElementById("recipe-markdown");
