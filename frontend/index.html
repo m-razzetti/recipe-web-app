@@ -33,8 +33,8 @@
 
 <main class="content">
   <div class="view-toggle">
-    <button id="gridBtn" class="toggle active" onclick="setView('grid')">Grid</button>
-    <button id="listBtn" class="toggle" onclick="setView('list')">List</button>
+    <button class="toggle active" onclick="setView('grid')">Grid</button>
+    <button class="toggle" onclick="setView('list')">List</button>
   </div>
 
   <div id="recipe-grid" class="grid"></div>
@@ -88,8 +88,8 @@ async function loadRecipes() {
 
   document.querySelector(".content").innerHTML = `
     <div class="view-toggle">
-      <button id="gridBtn" class="toggle ${currentView === 'grid' ? 'active' : ''}" onclick="setView('grid')">Grid</button>
-      <button id="listBtn" class="toggle ${currentView === 'list' ? 'active' : ''}" onclick="setView('list')">List</button>
+      <button class="toggle ${currentView === 'grid' ? 'active' : ''}" onclick="setView('grid')">Grid</button>
+      <button class="toggle ${currentView === 'list' ? 'active' : ''}" onclick="setView('list')">List</button>
     </div>
     <div id="recipe-grid" class="${currentView}"></div>
   `;
@@ -118,7 +118,7 @@ function setView(view) {
 
 function renderTags() {
   const set = new Set();
-  allRecipes.forEach(r => r.tags.forEach(t => set.add(t)));
+  allRecipes.forEach(r => (r.tags || []).forEach(t => set.add(t)));
 
   const ul = document.getElementById("tag-list");
   ul.innerHTML = "";
@@ -161,7 +161,7 @@ async function deleteTag(tag) {
   if (!confirm(`Delete tag "${tag}" from all recipes?`)) return;
 
   for (const recipe of allRecipes) {
-    if (recipe.tags.includes(tag)) {
+    if ((recipe.tags || []).includes(tag)) {
       const updatedTags = recipe.tags.filter(t => t !== tag).join(", ");
 
       const res = await fetch(`${API}/recipes/${encodeURIComponent(recipe.name)}`);
@@ -190,10 +190,12 @@ function renderGrid() {
 
   grid.innerHTML = "";
 
-  const q = document.querySelector(".search").value.toLowerCase();
+  const searchEl = document.querySelector(".search");
+  const q = (searchEl ? searchEl.value : "").toLowerCase();
 
   const visible = allRecipes.filter(r => {
-    if (activeTag && !r.tags.includes(activeTag)) return false;
+    const tags = r.tags || [];
+    if (activeTag && !tags.includes(activeTag)) return false;
     if (q && !r.name.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -240,11 +242,9 @@ async function openRecipe(name) {
   document.querySelector(".content").innerHTML = `
     <div class="recipe-header no-print">
       <button class="icon-btn" onclick="goBack()">←</button>
-      <div class="header-actions">
-        <button class="icon-btn" onclick="editRecipe('${name}')">✏️</button>
-        <button class="icon-btn" onclick="window.print()">🖨</button>
-        <button class="icon-btn danger" onclick="deleteRecipe()">🗑</button>
-      </div>
+      <button class="icon-btn" onclick="editRecipe('${name}')">✏️</button>
+      <button class="icon-btn" onclick="window.print()">🖨</button>
+      <button class="icon-btn danger" onclick="deleteRecipe()">🗑</button>
     </div>
 
     <article class="recipe">
@@ -265,13 +265,11 @@ async function editRecipe(name) {
   const res = await fetch(`${API}/recipes/${encodeURIComponent(name)}`);
   const md = await res.text();
 
-  document.getElementById("recipe-name").value = name;
-  document.getElementById("recipe-markdown").value =
-    md.replace(/^Tags:.*\n+/m, "");
+  recipeName.value = name;
+  recipeMarkdown.value = md.replace(/^Tags:.*\n+/m, "");
 
   const recipe = allRecipes.find(r => r.name === name);
-  document.getElementById("recipe-tags").value =
-    recipe?.tags.join(", ") || "";
+  recipeTags.value = (recipe?.tags || []).join(", ");
 
   document.getElementById("modal-title").textContent = "Edit Recipe";
   document.getElementById("modal").classList.remove("hidden");
@@ -292,7 +290,7 @@ async function deleteRecipe() {
 }
 
 /* =========================
-   SAVE
+   SAVE (Import + Edit)
 ========================= */
 
 async function saveRecipe() {
@@ -358,5 +356,6 @@ const photoInput = document.getElementById("photo-input");
 
 loadRecipes();
 </script>
+
 </body>
 </html>

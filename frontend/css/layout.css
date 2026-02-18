@@ -55,13 +55,6 @@
   overflow: auto;
 }
 
-/* Header */
-.recipe-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-}
 
 .recipe {
   max-width: 850px;

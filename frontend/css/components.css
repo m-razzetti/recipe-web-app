@@ -28,6 +28,7 @@
   transform: translateY(-1px);
 }
 
+
 /* =========================
    TAG ITEMS
 ========================= */
@@ -55,6 +56,7 @@
 .tag-delete:hover {
   opacity: 1;
 }
+
 
 /* =========================
    GRID
@@ -92,6 +94,7 @@
   font-weight: 600;
 }
 
+
 /* =========================
    LIST
 ========================= */
@@ -114,20 +117,24 @@
   border-radius: 12px;
   margin-right: 14px;
 }
+
+
 /* =========================
    RECIPE HEADER
 ========================= */
 
 .recipe-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;              /* group everything together */
   margin-bottom: 18px;
+  flex-wrap: nowrap;
 }
 
 .recipe-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  align-items: center;
 }
 
 .icon-btn {
