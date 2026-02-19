@@ -7,15 +7,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-<link rel="stylesheet" href="/css/base.css" />
-<link rel="stylesheet" href="/css/layout.css" />
-<link rel="stylesheet" href="/css/components.css" />
-<link rel="stylesheet" href="/css/modal.css" />
-<link rel="stylesheet" href="/css/mobile.css" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/modal.css" />
+<link rel="stylesheet" href="css/mobile.css" />
+<link rel="stylesheet" href="css/print.css" />
 </head>
 
 <body>
-
 <div id="app"></div>
 
 <script>
@@ -29,10 +29,10 @@ function api(url, options = {}) {
 }
 
 let allRecipes = [];
-let currentRecipe = null;
 let activeTag = null;
-let isEditing = false;
 let currentView = "grid";
+let currentRecipe = null;
+let isEditing = false;
 
 /* =========================
    BOOT
@@ -44,7 +44,7 @@ async function boot() {
 
   if (data.authenticated) {
     renderApp();
-    loadRecipes();
+    await loadRecipes();
   } else {
     renderLogin();
   }
@@ -70,14 +70,11 @@ function renderLogin() {
     e.preventDefault();
     const form = new FormData(e.target);
 
-    const res = await api(`${API}/login`, {
-      method: "POST",
-      body: form
-    });
+    const res = await api(`${API}/login`, { method: "POST", body: form });
 
     if (res.ok) {
       renderApp();
-      loadRecipes();
+      await loadRecipes();
     } else {
       alert("Invalid credentials");
     }
@@ -85,42 +82,54 @@ function renderLogin() {
 }
 
 /* =========================
-   MAIN APP
+   APP SHELL
 ========================= */
 
 function renderApp() {
   document.getElementById("app").innerHTML = `
   <div class="layout">
+
     <aside class="sidebar">
       <h2>Library</h2>
+
       <input class="search" placeholder="Search" oninput="renderGrid()" />
+
       <div class="tags">
         <h4>Tags</h4>
         <ul id="tag-list"></ul>
       </div>
+
       <button class="primary" onclick="openImport()">+ Import Recipe</button>
       <button onclick="logout()">Logout</button>
     </aside>
+
     <main class="content">
+
       <div id="grid-view">
         <div class="view-toggle">
           <button id="gridBtn" class="toggle active" onclick="setView('grid')">Grid</button>
           <button id="listBtn" class="toggle" onclick="setView('list')">List</button>
         </div>
+
         <div id="recipe-grid" class="grid"></div>
       </div>
+
       <div id="recipe-view" style="display:none;"></div>
+
     </main>
+
   </div>
 
   <!-- MODAL -->
   <div id="modal" class="modal hidden">
     <div class="modal-card">
-      <h3 id="modal-title"></h3>
+      <h3 id="modal-title">Import Recipe</h3>
+
       <input id="recipe-name" placeholder="Recipe name" />
       <input id="recipe-tags" placeholder="Tags (space separated)" />
-      <textarea id="recipe-markdown" placeholder="Markdown"></textarea>
+      <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
       <input type="file" id="photo-input" />
+
       <div class="modal-actions">
         <button onclick="closeModal()">Cancel</button>
         <button class="primary" onclick="saveRecipe()">Save</button>
@@ -131,43 +140,69 @@ function renderApp() {
 }
 
 /* =========================
-   VIEW TOGGLE
-========================= */
-
-function setView(view) {
-  currentView = view;
-
-  document.getElementById("recipe-grid").className = view;
-
-  document.getElementById("gridBtn").classList.remove("active");
-  document.getElementById("listBtn").classList.remove("active");
-
-  if (view === "grid") {
-    document.getElementById("gridBtn").classList.add("active");
-  } else {
-    document.getElementById("listBtn").classList.add("active");
-  }
-}
-
-/* =========================
-   LOGOUT
-========================= */
-
-async function logout() {
-  await api(`${API}/logout`, { method: "POST" });
-  renderLogin();
-}
-
-/* =========================
    LOAD
 ========================= */
 
 async function loadRecipes() {
   const res = await api(`${API}/recipes`);
-  if (!res.ok) return renderLogin();
+  if (!res.ok) {
+    renderLogin();
+    return;
+  }
+
   allRecipes = await res.json();
   renderTags();
   renderGrid();
+}
+
+/* =========================
+   GRID / LIST
+========================= */
+
+function setView(view) {
+  currentView = view;
+  document.getElementById("gridBtn").classList.toggle("active", view === "grid");
+  document.getElementById("listBtn").classList.toggle("active", view === "list");
+  renderGrid();
+}
+
+function renderGrid() {
+  const grid = document.getElementById("recipe-grid");
+  if (!grid) return;
+
+  grid.className = currentView === "list" ? "list" : "grid";
+  grid.innerHTML = "";
+
+  const q = document.querySelector(".search")?.value.toLowerCase() || "";
+
+  const visible = allRecipes.filter(r => {
+    if (activeTag && !(r.tags || []).includes(activeTag)) return false;
+    if (q && !r.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  visible.forEach(r => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const img = document.createElement("div");
+    img.className = "card-image";
+
+    if (r.cover) {
+      img.style.backgroundImage =
+        `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
+    }
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = r.name;
+
+    card.appendChild(img);
+    card.appendChild(title);
+    card.onclick = () => openRecipe(r.name);
+
+    grid.appendChild(card);
+  });
 }
 
 /* =========================
@@ -188,22 +223,21 @@ function renderTags() {
 
   [...set].sort().forEach(tag => {
     const li = document.createElement("li");
-    li.style.display = "flex";
-    li.style.justifyContent = "space-between";
+    li.className = "tag-item";
 
     const name = document.createElement("span");
     name.textContent = tag;
-    name.onclick = () => { activeTag = tag; renderGrid(); };
+    name.onclick = () => {
+      activeTag = tag;
+      renderGrid();
+    };
 
-    const del = document.createElement("span");
+    const del = document.createElement("button");
+    del.className = "tag-delete";
     del.textContent = "🗑";
-    del.style.cursor = "pointer";
-    del.onclick = async () => {
-      if (!confirm(`Delete tag "${tag}"?`)) return;
-      const res = await api(`${API}/tags/${encodeURIComponent(tag)}`, {
-        method: "DELETE"
-      });
-      if (res.ok) loadRecipes();
+    del.onclick = (e) => {
+      e.stopPropagation();
+      deleteTag(tag);
     };
 
     li.appendChild(name);
@@ -212,162 +246,82 @@ function renderTags() {
   });
 }
 
-/* =========================
-   GRID / LIST RENDER
-========================= */
+async function deleteTag(tag) {
+  if (!confirm(`Delete tag "${tag}" from all recipes?`)) return;
 
-function renderGrid() {
-  const grid = document.getElementById("recipe-grid");
-  grid.innerHTML = "";
-  grid.className = currentView;
+  for (const recipe of allRecipes) {
+    if (!(recipe.tags || []).includes(tag)) continue;
 
-  const visible = allRecipes.filter(r =>
-    !activeTag || r.tags.includes(activeTag)
-  );
+    const res = await api(`${API}/recipes/${encodeURIComponent(recipe.name)}`);
+    const md = await res.text();
 
-  visible.forEach(r => {
-    const card = document.createElement("div");
-    card.className = "card";
+    const clean = md.replace(/^Tags:.*\n+/m, "");
+    const newTags = (recipe.tags || []).filter(t => t !== tag).join(" ");
 
-    const img = document.createElement("div");
-    img.className = "card-image";
-    if (r.cover) {
-      img.style.backgroundImage =
-        `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
-    }
+    const form = new FormData();
+    form.append("name", recipe.name);
+    form.append("markdown", clean);
+    form.append("tags", newTags);
 
-    const title = document.createElement("div");
-    title.className = "card-title";
-    title.textContent = r.name;
+    await api(`${API}/recipes`, { method: "POST", body: form });
+  }
 
-    card.appendChild(img);
-    card.appendChild(title);
-    card.onclick = () => openRecipe(r.name);
-
-    grid.appendChild(card);
-  });
+  await loadRecipes();
 }
 
 /* =========================
-   OPEN / EDIT / DELETE
+   OPEN RECIPE
 ========================= */
 
 async function openRecipe(name) {
   currentRecipe = name;
 
   const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
-  if (!res.ok) return renderLogin();
+  let md = await res.text();
+  md = md.replace(/^Tags:.*\n+/m, "");
 
-  const md = await res.text();
-  const html = marked.parse(md.replace(/^Tags:.*\n+/m, ""));
+  const html = marked.parse(md);
+  const recipe = allRecipes.find(r => r.name === name);
 
   document.getElementById("grid-view").style.display = "none";
   const view = document.getElementById("recipe-view");
   view.style.display = "block";
 
+  const coverHtml = recipe?.cover
+    ? `<img src="${API}/photos/${encodeURIComponent(name)}/${encodeURIComponent(recipe.cover)}"
+            style="width:380px; max-width:40vw; border-radius:12px;" />`
+    : "";
+
   view.innerHTML = `
-    <div class="recipe-header">
+    <div class="recipe-header no-print">
       <button class="icon-btn" onclick="goBack()">←</button>
       <div class="recipe-actions">
-        <button class="icon-btn" onclick="editRecipe()">✏️</button>
+        <button class="icon-btn" onclick="editRecipe('${name}')">✏️</button>
         <button class="icon-btn" onclick="window.print()">🖨</button>
-        <button class="icon-btn danger" onclick="deleteRecipe()">🗑</button>
+        <button class="icon-btn danger" onclick="deleteRecipe('${name}')">🗑</button>
       </div>
     </div>
-    <article class="recipe">
-      <h1>${name}</h1>
-      ${html}
-    </article>
+
+    <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:1; min-width:280px;">
+        <h1>${name}</h1>
+        ${html}
+      </div>
+      <div style="min-width:220px;">
+        ${coverHtml}
+      </div>
+    </div>
   `;
 }
-
-/* =========================
-   IMPORT / EDIT / SAVE
-========================= */
-
-function openImport() {
-  isEditing = false;
-  document.getElementById("modal-title").textContent = "Import Recipe";
-  document.getElementById("recipe-name").value = "";
-  document.getElementById("recipe-tags").value = "";
-  document.getElementById("recipe-markdown").value = "";
-  document.getElementById("photo-input").value = "";
-  document.getElementById("modal").classList.remove("hidden");
-}
-
-async function editRecipe() {
-  isEditing = true;
-
-  const res = await api(`${API}/recipes/${encodeURIComponent(currentRecipe)}`);
-  const md = await res.text();
-
-  document.getElementById("modal-title").textContent = "Edit Recipe";
-  document.getElementById("recipe-name").value = currentRecipe;
-  document.getElementById("recipe-markdown").value =
-    md.replace(/^Tags:.*\n+/m, "");
-
-  const recipe = allRecipes.find(r => r.name === currentRecipe);
-  document.getElementById("recipe-tags").value =
-    recipe?.tags.join(" ") || "";
-
-  document.getElementById("modal").classList.remove("hidden");
-}
-
-async function saveRecipe() {
-  const name = document.getElementById("recipe-name").value.trim();
-  const markdown = document.getElementById("recipe-markdown").value;
-  const tags = document.getElementById("recipe-tags").value;
-  const photo = document.getElementById("photo-input").files[0];
-
-  if (!name || !markdown) {
-    alert("Name and markdown required");
-    return;
-  }
-
-  const form = new FormData();
-  form.append("name", name);
-  form.append("markdown", markdown);
-  form.append("tags", tags);
-  if (photo) form.append("photo", photo);
-
-  await api(`${API}/recipes`, {
-    method: "POST",
-    body: form
-  });
-
-  closeModal();
-  loadRecipes();
-  if (isEditing) goBack();
-}
-
-async function deleteRecipe() {
-  if (!confirm("Delete this recipe?")) return;
-
-  const res = await api(`${API}/recipes/${encodeURIComponent(currentRecipe)}`, {
-    method: "DELETE"
-  });
-
-  if (res.ok) {
-    goBack();
-    loadRecipes();
-  }
-}
-
-/* =========================
-   BACK / MODAL
-========================= */
 
 function goBack() {
   document.getElementById("recipe-view").style.display = "none";
   document.getElementById("grid-view").style.display = "block";
 }
 
-function closeModal() {
-  document.getElementById("modal").classList.add("hidden");
-}
+/* ========================= */
 
 boot();
 </script>
-
 </body>
 </html>

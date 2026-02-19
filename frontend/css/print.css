@@ -1,150 +1,79 @@
 /* =========================
-   SCREEN vs PRINT
-   ========================= */
-.print-only { display: none; }
-.no-print { display: block; }
-
-@media print {
-  .print-only { display: block !important; }
-  .no-print { display: none !important; }
-}
-
-/* =========================
-   PRINT — LETTER
-   ========================= */
-@page {
-  size: Letter;
-  margin: 0.75in;
-}
+   PRINT CLEANUP
+========================= */
 
 @media print {
 
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: white;
-    color: #000;
+  /* Remove background */
+  body {
+    background: #fff !important;
   }
 
+  /* Hide all UI chrome */
+  .sidebar,
+  .mobile-topbar,
+  .view-toggle,
+  .recipe-header,
+  .icon-btn,
+  .modal,
+  button,
+  .toggle {
+    display: none !important;
+  }
+
+  /* Remove layout grid */
   .layout {
     display: block !important;
   }
 
-  .sidebar,
-  button {
+  .content {
+    padding: 0 !important;
+  }
+
+  /* Only print recipe */
+  #grid-view {
     display: none !important;
   }
 
-  .content {
-    padding: 0 !important;
-    overflow: visible !important;
+  #recipe-view {
+    display: block !important;
   }
 
-  .print-card {
-    font-family: "Georgia", "Times New Roman", serif;
-    line-height: 1.4;
+  .recipe {
+    max-width: 100% !important;
   }
 
-  .print-header {
-    position: relative;
-    padding-right: 3in;
-    margin-bottom: 20px;
-  }
-
-  .print-title {
-    font-size: 30px;
-    margin: 0 0 6px;
-  }
-
-  .print-tags {
-    font-size: 12px;
-    color: #555;
+  /* Improve typography */
+  h1 {
+    font-size: 24pt;
     margin-bottom: 10px;
   }
 
-  .print-header img:first-of-type {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 2.6in;
-    height: 2.6in;
-    object-fit: cover;
-    border-radius: 6px;
-  }
-
-  .print-card img:not(:first-of-type) {
-    display: none !important;
-  }
-
-  .print-body h2 {
-    font-size: 18px;
+  h2 {
     margin-top: 20px;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #bbb;
-    padding-bottom: 4px;
+  }
+
+  ul {
+    margin-bottom: 16px;
+  }
+
+  ol {
+    margin-bottom: 16px;
+  }
+
+  /* Force images to print */
+  .recipe img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  /* Prevent awkward breaks */
+  h1, h2, h3 {
     page-break-after: avoid;
   }
 
-  .print-body p {
-    margin: 6px 0;
-  }
-
-  .print-body ul,
-  .print-body ol {
-    padding-left: 22px;
-    margin: 6px 0;
-  }
-
-  .print-body li {
-    margin-bottom: 4px;
+  ul, ol {
     page-break-inside: avoid;
   }
-}
-Print.css:/* =========================
-   MODAL
-   ========================= */
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,.45);
-  padding: 18px;
-}
 
-.hidden {
-  display: none !important;
-}
-
-.modal-card {
-  width: min(900px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 18px 60px rgba(0,0,0,.25);
-}
-
-#recipe-name,
-#recipe-tags,
-#recipe-markdown {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
-
-#recipe-markdown {
-  min-height: 320px;
-  resize: vertical;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
