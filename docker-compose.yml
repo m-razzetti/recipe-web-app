@@ -9,6 +9,12 @@ services:
       DROPBOX_APP_KEY: rqzwq45lzaaxi68
       DROPBOX_APP_SECRET: 3ox1aph7nqhfbno
       DROPBOX_REFRESH_TOKEN: DzLdclXX7OMAAAAAAAAAAZdMpbZuaM-tRb1lcsqupNWNe-gpuAqOkbZY1e-qvDE4
+
+      # 🔐 NEW AUTH VARIABLES
+      APP_USERNAME: mrazz
+      APP_PASSWORD: mikerazz
+      SESSION_SECRET: dd2aa90ead80896c45904d9cd5edf32d95c230c284dc7d4719faf7b4f138a23d
+
     restart: unless-stopped
 
   frontend:

@@ -1,19 +1,62 @@
-from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi import FastAPI, UploadFile, Form, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import dropbox
 import os
 import io
 import re
+import secrets
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://recipes.razzetti.org"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --------------------------
+# ENV CONFIG
+# --------------------------
+
+ADMIN_USERNAME = os.environ["APP_USERNAME"]
+ADMIN_PASSWORD = os.environ["APP_PASSWORD"]
+SESSION_SECRET = os.environ["SESSION_SECRET"]
+
+SESSION_COOKIE = "recipes_session"
+SESSION_DURATION_DAYS = 30
+
+# --------------------------
+# Session Store
+# --------------------------
+
+sessions = {}
+
+def create_session():
+    token = secrets.token_hex(32)
+    expires = datetime.utcnow() + timedelta(days=SESSION_DURATION_DAYS)
+    sessions[token] = expires
+    return token
+
+def verify_session(token: str):
+    if token not in sessions:
+        return False
+    if sessions[token] < datetime.utcnow():
+        del sessions[token]
+        return False
+    return True
+
+def require_auth(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token or not verify_session(token):
+        raise HTTPException(status_code=401)
+
+# --------------------------
+# Dropbox Setup
+# --------------------------
 
 dbx = dropbox.Dropbox(
     oauth2_refresh_token=os.environ["DROPBOX_REFRESH_TOKEN"],
@@ -23,7 +66,6 @@ dbx = dropbox.Dropbox(
 
 RECIPES_ROOT = "/recipes"
 
-
 # --------------------------
 # Helpers
 # --------------------------
@@ -31,42 +73,77 @@ RECIPES_ROOT = "/recipes"
 def recipe_md_path(name: str) -> str:
     return f"{RECIPES_ROOT}/{name}.md"
 
-
 def recipe_folder(name: str) -> str:
     return f"{RECIPES_ROOT}/{name}"
 
+def normalize_tags(tag_string: str):
+    if not tag_string:
+        return []
+    cleaned = tag_string.replace(",", " ")
+    tags = [t.strip().lower() for t in cleaned.split() if t.strip()]
+    return list(dict.fromkeys(tags))
 
 def extract_tags(markdown: str):
     match = re.search(r"^Tags:\s*(.+)$", markdown, re.MULTILINE)
     if not match:
         return []
-    return [t.strip() for t in match.group(1).split(",") if t.strip()]
-
+    return normalize_tags(match.group(1))
 
 def replace_tags(markdown: str, new_tags: list[str]):
     markdown = re.sub(r"^Tags:.*\n+", "", markdown, flags=re.MULTILINE)
-
     if not new_tags:
         return markdown.lstrip()
-
-    tag_line = f"Tags: {', '.join(new_tags)}\n\n"
+    tag_line = f"Tags: {' '.join(new_tags)}\n\n"
     return tag_line + markdown.lstrip()
 
+# --------------------------
+# AUTH ROUTES
+# --------------------------
+
+@app.post("/api/login")
+def login(response: Response, username: str = Form(...), password: str = Form(...)):
+    if username != ADMIN_USERNAME or password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401)
+
+    token = create_session()
+
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=SESSION_DURATION_DAYS * 24 * 60 * 60,
+    )
+
+    return {"status": "ok"}
+
+@app.post("/api/logout")
+def logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE)
+    return {"status": "logged out"}
+
+@app.get("/api/auth-check")
+def auth_check(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token and verify_session(token):
+        return {"authenticated": True}
+    return {"authenticated": False}
 
 # --------------------------
-# List Recipes
+# PROTECTED ROUTES
 # --------------------------
 
 @app.get("/api/recipes")
-def list_recipes():
-    result = dbx.files_list_folder(RECIPES_ROOT)
+def list_recipes(request: Request):
+    require_auth(request)
 
+    result = dbx.files_list_folder(RECIPES_ROOT)
     recipes = []
 
     for entry in result.entries:
         if entry.name.endswith(".md"):
             name = entry.name[:-3]
-
             _, res = dbx.files_download(recipe_md_path(name))
             md = res.content.decode("utf-8")
 
@@ -88,32 +165,23 @@ def list_recipes():
 
     return recipes
 
-
-# --------------------------
-# Get Recipe
-# --------------------------
-
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
-def get_recipe(name: str):
-    try:
-        _, res = dbx.files_download(recipe_md_path(name))
-        return res.content.decode("utf-8")
-    except:
-        raise HTTPException(status_code=404)
-
-
-# --------------------------
-# Save Recipe
-# --------------------------
+def get_recipe(name: str, request: Request):
+    require_auth(request)
+    _, res = dbx.files_download(recipe_md_path(name))
+    return res.content.decode("utf-8")
 
 @app.post("/api/recipes")
 async def save_recipe(
+    request: Request,
     name: str = Form(...),
     markdown: str = Form(...),
     tags: str = Form(""),
     photo: UploadFile | None = None,
 ):
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    require_auth(request)
+
+    tag_list = normalize_tags(tags)
     final_md = replace_tags(markdown, tag_list)
 
     dbx.files_upload(
@@ -129,7 +197,6 @@ async def save_recipe(
             pass
 
         content = await photo.read()
-
         dbx.files_upload(
             content,
             f"{recipe_folder(name)}/{photo.filename}",
@@ -138,13 +205,9 @@ async def save_recipe(
 
     return {"status": "ok"}
 
-
-# --------------------------
-# Delete Recipe
-# --------------------------
-
 @app.delete("/api/recipes/{name}")
-def delete_recipe(name: str):
+def delete_recipe(name: str, request: Request):
+    require_auth(request)
     dbx.files_delete_v2(recipe_md_path(name))
     try:
         dbx.files_delete_v2(recipe_folder(name))
@@ -152,19 +215,19 @@ def delete_recipe(name: str):
         pass
     return {"status": "deleted"}
 
-
 # --------------------------
-# DELETE TAG GLOBALLY
+# DELETE TAG (RESTORED)
 # --------------------------
 
 @app.delete("/api/tags/{tag}")
-def delete_tag(tag: str):
+def delete_tag(tag: str, request: Request):
+    require_auth(request)
+
     result = dbx.files_list_folder(RECIPES_ROOT)
 
     for entry in result.entries:
         if entry.name.endswith(".md"):
             name = entry.name[:-3]
-
             _, res = dbx.files_download(recipe_md_path(name))
             md = res.content.decode("utf-8")
 
@@ -182,17 +245,9 @@ def delete_tag(tag: str):
 
     return {"status": "tag deleted"}
 
-
-# --------------------------
-# Serve Photos
-# --------------------------
-
 @app.get("/api/photos/{recipe}/{filename}")
-def get_photo(recipe: str, filename: str):
+def get_photo(recipe: str, filename: str, request: Request):
+    require_auth(request)
     path = f"{RECIPES_ROOT}/{recipe}/{filename}"
     _, res = dbx.files_download(path)
-
-    return StreamingResponse(
-        io.BytesIO(res.content),
-        media_type="image/jpeg",
-    )
+    return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
