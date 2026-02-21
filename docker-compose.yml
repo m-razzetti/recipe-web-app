@@ -14,6 +14,7 @@ services:
       APP_USERNAME: mrazz
       APP_PASSWORD: mikerazz
       SESSION_SECRET: dd2aa90ead80896c45904d9cd5edf32d95c230c284dc7d4719faf7b4f138a23d
+      DISABLE_AUTH: "true"
 
     restart: unless-stopped
 

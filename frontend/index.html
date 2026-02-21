@@ -1,327 +1,680 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Recipes</title>
+
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/css/modal.css">
+<link rel="stylesheet" href="/css/print.css">
+<link rel="stylesheet" href="/css/mobile.css">
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-<link rel="stylesheet" href="css/base.css" />
-<link rel="stylesheet" href="css/layout.css" />
-<link rel="stylesheet" href="css/components.css" />
-<link rel="stylesheet" href="css/modal.css" />
-<link rel="stylesheet" href="css/mobile.css" />
-<link rel="stylesheet" href="css/print.css" />
+<style>
+.hidden { display:none !important; }
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.loading-overlay.visible {
+  display: flex;
+}
+
+.loading-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  border-top-color: #111827;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.detail-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:20px;
+}
+
+.detail-icons {
+  display:flex;
+  gap:10px;
+}
+
+.detail-sticky {
+  position: sticky;
+  top: 8px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e5e7eb;
+  backdrop-filter: blur(4px);
+}
+
+.detail-sticky-title {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-body {
+  display: block;
+}
+
+.detail-body::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.detail-image-wrap {
+  float: right;
+  position: relative;
+  width: min(38%, 240px);
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.detail-image {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 14px;
+  display: block;
+}
+
+.detail-image.is-fallback {
+  object-fit: contain;
+  background: #fff;
+}
+
+.detail-image-delete {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111827;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.detail-image-delete:hover {
+  background: rgba(254, 242, 242, 0.98);
+  color: #991b1b;
+  border-color: rgba(153, 27, 27, 0.35);
+  transform: scale(1.06);
+}
+
+#recipe-detail {
+  width: 100%;
+  max-width: 1080px;
+}
+
+.markdown-content ul { margin-left:20px; }
+.markdown-content p { margin-bottom:10px; }
+
+.recipe-card { cursor:pointer; }
+
+.recipe-card img {
+  width:100%;
+  height:200px;
+  object-fit:cover;
+}
+
+.recipe-card img.is-fallback {
+  object-fit: contain;
+  background: #fff;
+}
+
+.recipe-card-meta {
+  padding: 0 14px 14px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.empty-state {
+  border: 1px dashed #d1d5db;
+  border-radius: 14px;
+  background: #fff;
+  padding: 26px;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+}
+
+.empty-state p {
+  margin: 0 0 14px 0;
+  color: #4b5563;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.empty-actions button {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.empty-actions button.primary {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.back-btn { margin-bottom:0; }
+
+/* Sidebar tag list basic spacing */
+#tag-list > div,
+#tag-list > span,
+#tag-list > a {
+  display:block;
+  margin: 6px 0;
+}
+
+#tag-list > .tag-item {
+  display: flex;
+  align-items: center;
+}
+
+#tag-list > .tag-item .tag-delete {
+  margin-left: auto;
+}
+</style>
 </head>
 
 <body>
-<div id="app"></div>
+<div class="app">
+
+  <!-- MOBILE TOPBAR -->
+  <div class="mobile-topbar">
+    <button class="mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
+    <div class="mobile-title">Recipes</div>
+    <div style="width:40px;"></div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <h2>Library</h2>
+
+    <input id="search" placeholder="Search">
+
+    <h4>TAGS</h4>
+    <div id="tag-list"></div>
+
+    <button onclick="openImport()">+ Import Recipe</button>
+  </div>
+
+  <!-- MOBILE OVERLAY (click to close) -->
+  <div class="mobile-overlay" onclick="closeMobileSidebar()"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div id="grid-controls">
+      <button onclick="setGrid()" id="btn-grid">Grid</button>
+      <button onclick="setList()" id="btn-list">List</button>
+    </div>
+
+    <div id="recipe-grid"></div>
+
+    <div id="recipe-detail" class="hidden"></div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="hidden">
+  <div class="modal-content">
+    <h3 id="modal-title">Edit Recipe</h3>
+
+    <input id="recipe-name" placeholder="Recipe Name">
+    <input id="recipe-original-name" type="hidden" value="">
+    <input id="recipe-tags" placeholder="tags separated by space">
+    <textarea id="recipe-markdown" rows="15"></textarea>
+    <input type="file" id="photo-input">
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button onclick="closeModal()">Cancel</button>
+      <button onclick="saveRecipe()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+  <div class="loading-box">
+    <div class="loading-spinner"></div>
+    <div id="loading-text">Loading...</div>
+  </div>
+</div>
 
 <script>
 const API = "/api";
-
-function api(url, options = {}) {
-  return fetch(url, {
-    credentials: "include",
-    ...options
-  });
-}
-
+const DEFAULT_RECIPE_IMAGE = "/razz.png";
 let allRecipes = [];
-let activeTag = null;
-let currentView = "grid";
 let currentRecipe = null;
-let isEditing = false;
+let pendingRequests = 0;
+let loadingTimer = null;
+let loadingShownAt = 0;
 
-/* =========================
-   BOOT
-========================= */
+async function api(url, options={}) {
+  const { skipLoading, loadingMessage, ...fetchOptions } = options;
+  fetchOptions.credentials = "include";
 
-async function boot() {
-  const res = await api(`${API}/auth-check`);
-  const data = await res.json();
-
-  if (data.authenticated) {
-    renderApp();
-    await loadRecipes();
-  } else {
-    renderLogin();
+  if (!skipLoading) beginLoading(loadingMessage || "Loading...");
+  try {
+    return await fetch(url, fetchOptions);
+  } finally {
+    if (!skipLoading) endLoading();
   }
 }
 
-/* =========================
-   LOGIN
-========================= */
+function beginLoading(message) {
+  pendingRequests += 1;
+  const overlay = document.getElementById("loading-overlay");
+  const text = document.getElementById("loading-text");
+  text.textContent = message || "Loading...";
 
-function renderLogin() {
-  document.getElementById("app").innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;height:100vh;">
-      <form id="login-form" style="width:300px;display:flex;flex-direction:column;gap:10px;">
-        <h2>Login</h2>
-        <input name="username" placeholder="Username" required />
-        <input name="password" type="password" placeholder="Password" required />
-        <button class="primary">Login</button>
-      </form>
-    </div>
-  `;
+  if (pendingRequests > 1) return;
 
-  document.getElementById("login-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const form = new FormData(e.target);
-
-    const res = await api(`${API}/login`, { method: "POST", body: form });
-
-    if (res.ok) {
-      renderApp();
-      await loadRecipes();
-    } else {
-      alert("Invalid credentials");
-    }
-  };
+  if (loadingTimer) clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => {
+    overlay.classList.add("visible");
+    document.body.style.cursor = "progress";
+    loadingShownAt = Date.now();
+    loadingTimer = null;
+  }, 140);
 }
 
-/* =========================
-   APP SHELL
-========================= */
+function endLoading() {
+  pendingRequests = Math.max(0, pendingRequests - 1);
+  if (pendingRequests > 0) return;
 
-function renderApp() {
-  document.getElementById("app").innerHTML = `
-  <div class="layout">
-
-    <aside class="sidebar">
-      <h2>Library</h2>
-
-      <input class="search" placeholder="Search" oninput="renderGrid()" />
-
-      <div class="tags">
-        <h4>Tags</h4>
-        <ul id="tag-list"></ul>
-      </div>
-
-      <button class="primary" onclick="openImport()">+ Import Recipe</button>
-      <button onclick="logout()">Logout</button>
-    </aside>
-
-    <main class="content">
-
-      <div id="grid-view">
-        <div class="view-toggle">
-          <button id="gridBtn" class="toggle active" onclick="setView('grid')">Grid</button>
-          <button id="listBtn" class="toggle" onclick="setView('list')">List</button>
-        </div>
-
-        <div id="recipe-grid" class="grid"></div>
-      </div>
-
-      <div id="recipe-view" style="display:none;"></div>
-
-    </main>
-
-  </div>
-
-  <!-- MODAL -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-card">
-      <h3 id="modal-title">Import Recipe</h3>
-
-      <input id="recipe-name" placeholder="Recipe name" />
-      <input id="recipe-tags" placeholder="Tags (space separated)" />
-      <textarea id="recipe-markdown" placeholder="Paste markdown here..."></textarea>
-      <input type="file" id="photo-input" />
-
-      <div class="modal-actions">
-        <button onclick="closeModal()">Cancel</button>
-        <button class="primary" onclick="saveRecipe()">Save</button>
-      </div>
-    </div>
-  </div>
-  `;
-}
-
-/* =========================
-   LOAD
-========================= */
-
-async function loadRecipes() {
-  const res = await api(`${API}/recipes`);
-  if (!res.ok) {
-    renderLogin();
+  if (loadingTimer) {
+    clearTimeout(loadingTimer);
+    loadingTimer = null;
     return;
   }
 
-  allRecipes = await res.json();
-  renderTags();
-  renderGrid();
+  const overlay = document.getElementById("loading-overlay");
+  const minVisibleMs = 220;
+  const elapsed = Date.now() - loadingShownAt;
+  const hide = () => {
+    overlay.classList.remove("visible");
+    document.body.style.cursor = "";
+  };
+
+  if (elapsed < minVisibleMs) {
+    setTimeout(hide, minVisibleMs - elapsed);
+  } else {
+    hide();
+  }
+}
+
+function recipeImageSrc(name, cover) {
+  if (!cover) return DEFAULT_RECIPE_IMAGE;
+  return `/api/photos/${encodeURIComponent(name)}/${cover}`;
+}
+
+function clearSearch() {
+  const search = document.getElementById("search");
+  search.value = "";
+  renderRecipes(allRecipes);
 }
 
 /* =========================
-   GRID / LIST
+   MOBILE SIDEBAR
 ========================= */
 
-function setView(view) {
-  currentView = view;
-  document.getElementById("gridBtn").classList.toggle("active", view === "grid");
-  document.getElementById("listBtn").classList.toggle("active", view === "list");
-  renderGrid();
+function openMobileSidebar() {
+  document.body.classList.add("mobile-sidebar-open");
 }
 
-function renderGrid() {
-  const grid = document.getElementById("recipe-grid");
-  if (!grid) return;
+function closeMobileSidebar() {
+  document.body.classList.remove("mobile-sidebar-open");
+}
 
-  grid.className = currentView === "list" ? "list" : "grid";
+/* Close sidebar after selecting a tag on mobile */
+function closeSidebarIfMobile() {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    closeMobileSidebar();
+  }
+}
+
+async function loadRecipes() {
+  const res = await api(`${API}/recipes`);
+  if (!res.ok) return;
+  allRecipes = await res.json();
+  renderRecipes(allRecipes);
+  renderTags();
+}
+
+function renderRecipes(recipes) {
+  document.getElementById("recipe-detail").classList.add("hidden");
+  document.getElementById("grid-controls").style.display = "flex";
+  document.getElementById("recipe-grid").classList.remove("hidden");
+
+  const grid = document.getElementById("recipe-grid");
   grid.innerHTML = "";
 
-  const q = document.querySelector(".search")?.value.toLowerCase() || "";
+  if (!recipes.length) {
+    const hasLibrary = allRecipes.length > 0;
+    grid.innerHTML = hasLibrary
+      ? `
+        <div class="empty-state">
+          <h3>No matching recipes</h3>
+          <p>Try a different search or clear your filters.</p>
+          <div class="empty-actions">
+            <button class="primary" onclick="clearSearch()">Clear Search</button>
+            <button onclick="renderRecipes(allRecipes)">Show All</button>
+          </div>
+        </div>
+      `
+      : `
+        <div class="empty-state">
+          <h3>No recipes yet</h3>
+          <p>Import your first recipe to start your library.</p>
+          <div class="empty-actions">
+            <button class="primary" onclick="openImport()">+ Import Recipe</button>
+          </div>
+        </div>
+      `;
+    return;
+  }
 
-  const visible = allRecipes.filter(r => {
-    if (activeTag && !(r.tags || []).includes(activeTag)) return false;
-    if (q && !r.name.toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  visible.forEach(r => {
+  recipes.forEach(r => {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "recipe-card";
+    const isFallback = !r.cover;
+    const chips = (r.tags || []).slice(0, 3).map(t => `<span class="tag-chip">${t}</span>`).join("");
+    const extraTagCount = (r.tags || []).length - 3;
 
-    const img = document.createElement("div");
-    img.className = "card-image";
+    card.innerHTML = `
+      <img class="${isFallback ? "is-fallback" : ""}" src="${recipeImageSrc(r.name, r.cover)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
+      <div class="recipe-title">${r.name}</div>
+      <div class="recipe-card-meta">
+        ${chips}
+        ${extraTagCount > 0 ? `<span class="tag-chip">+${extraTagCount}</span>` : ""}
+      </div>
+    `;
 
-    if (r.cover) {
-      img.style.backgroundImage =
-        `url('${API}/photos/${encodeURIComponent(r.name)}/${encodeURIComponent(r.cover)}')`;
-    }
-
-    const title = document.createElement("div");
-    title.className = "card-title";
-    title.textContent = r.name;
-
-    card.appendChild(img);
-    card.appendChild(title);
     card.onclick = () => openRecipe(r.name);
-
     grid.appendChild(card);
   });
 }
 
-/* =========================
-   TAGS
-========================= */
-
 function renderTags() {
-  const set = new Set();
-  allRecipes.forEach(r => (r.tags || []).forEach(t => set.add(t)));
+  const tagList = document.getElementById("tag-list");
+  tagList.innerHTML = "";
 
-  const ul = document.getElementById("tag-list");
-  ul.innerHTML = "";
+  const tags = new Set();
+  allRecipes.forEach(r => r.tags.forEach(t => tags.add(t)));
 
-  const all = document.createElement("li");
-  all.textContent = "All Recipes";
-  all.onclick = () => { activeTag = null; renderGrid(); };
-  ul.appendChild(all);
+  const allBtn = document.createElement("div");
+  allBtn.textContent = "All Recipes";
+  allBtn.style.cursor = "pointer";
+  allBtn.onclick = () => { renderRecipes(allRecipes); closeSidebarIfMobile(); };
+  tagList.appendChild(allBtn);
 
-  [...set].sort().forEach(tag => {
-    const li = document.createElement("li");
-    li.className = "tag-item";
+  [...tags].sort().forEach(tag => {
+    const div = document.createElement("div");
+    div.className = "tag-item";
 
-    const name = document.createElement("span");
-    name.textContent = tag;
-    name.onclick = () => {
-      activeTag = tag;
-      renderGrid();
-    };
+    div.innerHTML = `
+      <span onclick="filterTag('${tag}')" style="cursor:pointer;">${tag}</span>
+      <span class="tag-delete" onclick="deleteTag('${tag}')">🗑</span>
+    `;
 
-    const del = document.createElement("button");
-    del.className = "tag-delete";
-    del.textContent = "🗑";
-    del.onclick = (e) => {
-      e.stopPropagation();
-      deleteTag(tag);
-    };
-
-    li.appendChild(name);
-    li.appendChild(del);
-    ul.appendChild(li);
+    tagList.appendChild(div);
   });
 }
 
-async function deleteTag(tag) {
-  if (!confirm(`Delete tag "${tag}" from all recipes?`)) return;
-
-  for (const recipe of allRecipes) {
-    if (!(recipe.tags || []).includes(tag)) continue;
-
-    const res = await api(`${API}/recipes/${encodeURIComponent(recipe.name)}`);
-    const md = await res.text();
-
-    const clean = md.replace(/^Tags:.*\n+/m, "");
-    const newTags = (recipe.tags || []).filter(t => t !== tag).join(" ");
-
-    const form = new FormData();
-    form.append("name", recipe.name);
-    form.append("markdown", clean);
-    form.append("tags", newTags);
-
-    await api(`${API}/recipes`, { method: "POST", body: form });
-  }
-
-  await loadRecipes();
+function filterTag(tag) {
+  renderRecipes(allRecipes.filter(r => r.tags.includes(tag)));
+  closeSidebarIfMobile();
 }
-
-/* =========================
-   OPEN RECIPE
-========================= */
 
 async function openRecipe(name) {
   currentRecipe = name;
+  closeSidebarIfMobile();
 
   const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
+  if (!res.ok) return;
+
   let md = await res.text();
+
+  // Remove Tags line
   md = md.replace(/^Tags:.*\n+/m, "");
 
-  const html = marked.parse(md);
+  // Remove first markdown heading so title isn't duplicated
+  md = md.replace(/^#+\s+.*\n?/, "");
+
   const recipe = allRecipes.find(r => r.name === name);
+  const html = marked.parse(md);
 
-  document.getElementById("grid-view").style.display = "none";
-  const view = document.getElementById("recipe-view");
-  view.style.display = "block";
+  document.getElementById("grid-controls").style.display = "none";
+  document.getElementById("recipe-grid").classList.add("hidden");
+  document.getElementById("recipe-detail").classList.remove("hidden");
 
-  const coverHtml = recipe?.cover
-    ? `<img src="${API}/photos/${encodeURIComponent(name)}/${encodeURIComponent(recipe.cover)}"
-            style="width:380px; max-width:40vw; border-radius:12px;" />`
-    : "";
+  document.getElementById("recipe-detail").innerHTML = `
+    <div class="detail-sticky">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="detail-sticky-title">${name}</div>
+      <button onclick="window.print()">🖨️</button>
+    </div>
 
-  view.innerHTML = `
-    <div class="recipe-header no-print">
-      <button class="icon-btn" onclick="goBack()">←</button>
-      <div class="recipe-actions">
-        <button class="icon-btn" onclick="editRecipe('${name}')">✏️</button>
-        <button class="icon-btn" onclick="window.print()">🖨</button>
-        <button class="icon-btn danger" onclick="deleteRecipe('${name}')">🗑</button>
+    <div class="detail-header">
+      <h1>${name}</h1>
+      <div class="detail-icons">
+        <button id="detail-edit-btn">✏️</button>
+        <button id="detail-delete-btn">🗑️</button>
       </div>
     </div>
 
-    <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
-      <div style="flex:1; min-width:280px;">
-        <h1>${name}</h1>
-        ${html}
+    <div class="detail-body">
+      <div class="detail-image-wrap">
+        <img class="detail-image ${recipe?.cover ? "" : "is-fallback"}" src="${recipeImageSrc(name, recipe?.cover)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
+        ${recipe?.cover ? `<button class="detail-image-delete" title="Delete image" onclick='deleteRecipeImage(${JSON.stringify(name)}, ${JSON.stringify(recipe.cover)})'>🗑️</button>` : ""}
       </div>
-      <div style="min-width:220px;">
-        ${coverHtml}
-      </div>
+      <div class="markdown-content">${html}</div>
     </div>
   `;
+
+  document.getElementById("detail-edit-btn").onclick = () => editRecipe(name);
+  document.getElementById("detail-delete-btn").onclick = () => deleteRecipe(name);
 }
 
 function goBack() {
-  document.getElementById("recipe-view").style.display = "none";
-  document.getElementById("grid-view").style.display = "block";
+  renderRecipes(allRecipes);
 }
 
-/* ========================= */
+function setGrid(){
+  const grid = document.getElementById("recipe-grid");
+  grid.classList.remove("list-mode");
+  grid.classList.add("grid-mode");
 
-boot();
+  document.getElementById("btn-grid").classList.add("active");
+  document.getElementById("btn-list").classList.remove("active");
+}
+
+function setList(){
+  const grid = document.getElementById("recipe-grid");
+  grid.classList.remove("grid-mode");
+  grid.classList.add("list-mode");
+
+  document.getElementById("btn-list").classList.add("active");
+  document.getElementById("btn-grid").classList.remove("active");
+}
+
+async function editRecipe(name) {
+  const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
+  const md = await res.text();
+  const recipe = allRecipes.find(r => r.name === name);
+
+  document.getElementById("modal-title").textContent = "Edit Recipe";
+  document.getElementById("recipe-original-name").value = name;
+  document.getElementById("recipe-name").value = name;
+  document.getElementById("recipe-tags").value = (recipe?.tags || []).join(" ");
+  document.getElementById("recipe-markdown").value = md.replace(/^Tags:.*\n+/m, "");
+  document.getElementById("modal").classList.remove("hidden");
+}
+
+async function saveRecipe() {
+  const name = document.getElementById("recipe-name").value.trim();
+  const originalName = document.getElementById("recipe-original-name").value.trim();
+  const markdown = document.getElementById("recipe-markdown").value;
+  const tags = document.getElementById("recipe-tags").value.trim();
+  const photo = document.getElementById("photo-input").files[0];
+
+  if (!name || !markdown) {
+    alert("Name and markdown required");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("name", name);
+  form.append("markdown", markdown);
+  form.append("tags", tags);
+  if (originalName) form.append("original_name", originalName);
+  if (photo) form.append("photo", photo);
+
+  const res = await api(`${API}/recipes`, {
+    method:"POST",
+    body:form,
+    loadingMessage: "Saving recipe..."
+  });
+  if (!res.ok) { alert("Save failed"); return; }
+
+  document.getElementById("recipe-original-name").value = "";
+  closeModal();
+  await loadRecipes();
+  openRecipe(name);
+}
+
+async function deleteRecipe(name) {
+  if (!confirm("Delete recipe?")) return;
+  await api(`${API}/recipes/${encodeURIComponent(name)}`, {
+    method:"DELETE",
+    loadingMessage: "Deleting recipe..."
+  });
+  goBack();
+  loadRecipes();
+}
+
+async function deleteRecipeImage(name, filename) {
+  if (!confirm("Delete this recipe image?")) return;
+  const res = await api(`${API}/recipes/${encodeURIComponent(name)}/photo/${encodeURIComponent(filename)}`, {
+    method:"DELETE",
+    loadingMessage: "Deleting image..."
+  });
+  if (!res.ok) {
+    alert("Delete image failed");
+    return;
+  }
+  await loadRecipes();
+  openRecipe(name);
+}
+
+async function deleteTag(tag) {
+  if (!confirm("Delete tag everywhere?")) return;
+  await api(`${API}/tags/${encodeURIComponent(tag)}`, {
+    method:"DELETE",
+    loadingMessage: "Updating tags..."
+  });
+  await loadRecipes();
+}
+
+function openImport() {
+  document.getElementById("recipe-original-name").value = "";
+  document.getElementById("modal-title").textContent = "Import Recipe";
+  document.getElementById("recipe-name").value="";
+  document.getElementById("recipe-tags").value="";
+  document.getElementById("recipe-markdown").value="";
+  document.getElementById("photo-input").value="";
+  document.getElementById("modal").classList.remove("hidden");
+}
+
+function closeModal() {
+  document.getElementById("recipe-original-name").value = "";
+  document.getElementById("modal").classList.add("hidden");
+}
+
+function logout() {
+  api(`${API}/logout`, {method:"POST"}).then(()=>location.reload());
+}
+
+document.getElementById("search").addEventListener("input", e=>{
+  const q = e.target.value.toLowerCase();
+  renderRecipes(allRecipes.filter(r=>r.name.toLowerCase().includes(q)));
+});
+
+/* Close mobile sidebar if rotating to desktop */
+window.addEventListener("resize", () => {
+  if (!window.matchMedia("(max-width: 768px)").matches) {
+    closeMobileSidebar();
+  }
+});
+
+loadRecipes();
+setGrid();
 </script>
 </body>
 </html>

@@ -1,79 +1,85 @@
 /* =========================
-   PRINT CLEANUP
+   PRINT (US LETTER, 1 PAGE)
 ========================= */
 
-@media print {
+@page {
+  size: Letter portrait;
+  margin: 0.35in;
+}
 
-  /* Remove background */
+@media print {
+  html,
   body {
+    width: 8.5in;
+    height: 11in;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff !important;
+    color: #000 !important;
   }
 
-  /* Hide all UI chrome */
+  .app,
+  .main {
+    display: block !important;
+    height: auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
   .sidebar,
   .mobile-topbar,
-  .view-toggle,
-  .recipe-header,
-  .icon-btn,
-  .modal,
-  button,
-  .toggle {
+  .mobile-overlay,
+  .detail-sticky,
+  #grid-controls,
+  #recipe-grid,
+  #modal,
+  .back-btn,
+  .detail-icons,
+  button {
     display: none !important;
   }
 
-  /* Remove layout grid */
-  .layout {
+  #recipe-detail {
     display: block !important;
+    max-width: none !important;
+    width: auto !important;
+    height: 10.25in;
+    overflow: hidden;
+    font-size: 11pt;
+    line-height: 1.25;
   }
 
-  .content {
-    padding: 0 !important;
-  }
-
-  /* Only print recipe */
-  #grid-view {
-    display: none !important;
-  }
-
-  #recipe-view {
+  .detail-header {
     display: block !important;
+    margin: 0 0 0.12in 0 !important;
   }
 
-  .recipe {
-    max-width: 100% !important;
+  .detail-header h1 {
+    font-size: 20pt !important;
+    margin: 0 0 0.08in 0 !important;
   }
 
-  /* Improve typography */
-  h1 {
-    font-size: 24pt;
-    margin-bottom: 10px;
+  .detail-image-wrap {
+    float: right !important;
+    width: 2.25in !important;
+    margin: 0 0 0.12in 0.18in !important;
   }
 
-  h2 {
-    margin-top: 20px;
+  .detail-image {
+    width: 100% !important;
+    max-height: 2.25in !important;
+    object-fit: cover !important;
   }
 
-  ul {
-    margin-bottom: 16px;
-  }
-
-  ol {
-    margin-bottom: 16px;
-  }
-
-  /* Force images to print */
-  .recipe img {
-    max-width: 100% !important;
-    page-break-inside: avoid;
-  }
-
-  /* Prevent awkward breaks */
-  h1, h2, h3 {
+  .markdown-content h2,
+  .markdown-content h3 {
+    margin: 0.08in 0 0.06in 0 !important;
     page-break-after: avoid;
   }
 
-  ul, ol {
-    page-break-inside: avoid;
+  .markdown-content p,
+  .markdown-content ul,
+  .markdown-content ol {
+    margin: 0 0 0.08in 0 !important;
   }
-
 }

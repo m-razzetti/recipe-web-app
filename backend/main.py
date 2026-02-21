@@ -7,6 +7,8 @@ import io
 import re
 import secrets
 from datetime import datetime, timedelta
+from collections import OrderedDict
+import mimetypes
 
 app = FastAPI()
 
@@ -25,6 +27,7 @@ app.add_middleware(
 ADMIN_USERNAME = os.environ["APP_USERNAME"]
 ADMIN_PASSWORD = os.environ["APP_PASSWORD"]
 SESSION_SECRET = os.environ["SESSION_SECRET"]
+DISABLE_AUTH = os.environ.get("DISABLE_AUTH", "false").lower() == "true"
 
 SESSION_COOKIE = "recipes_session"
 SESSION_DURATION_DAYS = 30
@@ -50,6 +53,8 @@ def verify_session(token: str):
     return True
 
 def require_auth(request: Request):
+    if DISABLE_AUTH:
+        return
     token = request.cookies.get(SESSION_COOKIE)
     if not token or not verify_session(token):
         raise HTTPException(status_code=401)
@@ -97,6 +102,94 @@ def replace_tags(markdown: str, new_tags: list[str]):
     return tag_line + markdown.lstrip()
 
 # --------------------------
+# Cache Layer
+# --------------------------
+
+RECIPES_CACHE_TTL = timedelta(seconds=20)
+RECIPE_MD_CACHE_TTL = timedelta(seconds=60)
+PHOTO_CACHE_TTL = timedelta(minutes=15)
+PHOTO_CACHE_MAX_ITEMS = 128
+
+recipes_cache = {"value": None, "expires_at": datetime.min}
+recipe_md_cache: dict[str, tuple[str, datetime]] = {}
+photo_cache: OrderedDict[str, dict] = OrderedDict()
+
+def cache_fresh(expires_at: datetime) -> bool:
+    return datetime.utcnow() < expires_at
+
+def get_cached_recipes():
+    if recipes_cache["value"] is not None and cache_fresh(recipes_cache["expires_at"]):
+        return recipes_cache["value"]
+    return None
+
+def set_cached_recipes(data):
+    recipes_cache["value"] = data
+    recipes_cache["expires_at"] = datetime.utcnow() + RECIPES_CACHE_TTL
+
+def clear_recipes_cache():
+    recipes_cache["value"] = None
+    recipes_cache["expires_at"] = datetime.min
+
+def get_cached_recipe_md(name: str):
+    entry = recipe_md_cache.get(name)
+    if not entry:
+        return None
+    markdown, expires_at = entry
+    if cache_fresh(expires_at):
+        return markdown
+    recipe_md_cache.pop(name, None)
+    return None
+
+def set_cached_recipe_md(name: str, markdown: str):
+    recipe_md_cache[name] = (markdown, datetime.utcnow() + RECIPE_MD_CACHE_TTL)
+
+def clear_recipe_md_cache(name: str | None = None):
+    if name is None:
+        recipe_md_cache.clear()
+        return
+    recipe_md_cache.pop(name, None)
+
+def get_photo_cache_headers(etag: str):
+    return {
+        "Cache-Control": "private, max-age=86400",
+        "ETag": etag,
+    }
+
+def get_cached_photo(path: str):
+    entry = photo_cache.get(path)
+    if not entry:
+        return None
+    if not cache_fresh(entry["expires_at"]):
+        photo_cache.pop(path, None)
+        return None
+    photo_cache.move_to_end(path)
+    return entry
+
+def set_cached_photo(path: str, content: bytes, media_type: str, etag: str):
+    photo_cache[path] = {
+        "content": content,
+        "media_type": media_type,
+        "etag": etag,
+        "expires_at": datetime.utcnow() + PHOTO_CACHE_TTL,
+    }
+    photo_cache.move_to_end(path)
+    while len(photo_cache) > PHOTO_CACHE_MAX_ITEMS:
+        photo_cache.popitem(last=False)
+
+def clear_photo_cache(recipe: str | None = None):
+    if recipe is None:
+        photo_cache.clear()
+        return
+    prefix = f"{RECIPES_ROOT}/{recipe}/"
+    for key in [k for k in photo_cache if k.startswith(prefix)]:
+        photo_cache.pop(key, None)
+
+def invalidate_for_recipe_change(name: str | None = None):
+    clear_recipes_cache()
+    clear_photo_cache(name)
+    clear_recipe_md_cache(name)
+
+# --------------------------
 # AUTH ROUTES
 # --------------------------
 
@@ -125,6 +218,8 @@ def logout(response: Response):
 
 @app.get("/api/auth-check")
 def auth_check(request: Request):
+    if DISABLE_AUTH:
+        return {"authenticated": True}
     token = request.cookies.get(SESSION_COOKIE)
     if token and verify_session(token):
         return {"authenticated": True}
@@ -137,6 +232,10 @@ def auth_check(request: Request):
 @app.get("/api/recipes")
 def list_recipes(request: Request):
     require_auth(request)
+
+    cached = get_cached_recipes()
+    if cached is not None:
+        return cached
 
     result = dbx.files_list_folder(RECIPES_ROOT)
     recipes = []
@@ -163,13 +262,19 @@ def list_recipes(request: Request):
                 "cover": cover
             })
 
+    set_cached_recipes(recipes)
     return recipes
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
 def get_recipe(name: str, request: Request):
     require_auth(request)
+    cached = get_cached_recipe_md(name)
+    if cached is not None:
+        return cached
     _, res = dbx.files_download(recipe_md_path(name))
-    return res.content.decode("utf-8")
+    markdown = res.content.decode("utf-8")
+    set_cached_recipe_md(name, markdown)
+    return markdown
 
 @app.post("/api/recipes")
 async def save_recipe(
@@ -177,9 +282,19 @@ async def save_recipe(
     name: str = Form(...),
     markdown: str = Form(...),
     tags: str = Form(""),
+    original_name: str = Form(""),
     photo: UploadFile | None = None,
 ):
     require_auth(request)
+
+    old_name = original_name.strip()
+    is_rename = bool(old_name and old_name != name)
+
+    if is_rename:
+        try:
+            dbx.files_move_v2(recipe_folder(old_name), recipe_folder(name))
+        except dropbox.exceptions.ApiError:
+            pass
 
     tag_list = normalize_tags(tags)
     final_md = replace_tags(markdown, tag_list)
@@ -203,6 +318,15 @@ async def save_recipe(
             mode=dropbox.files.WriteMode.overwrite,
         )
 
+    if is_rename:
+        try:
+            dbx.files_delete_v2(recipe_md_path(old_name))
+        except dropbox.exceptions.ApiError:
+            pass
+        invalidate_for_recipe_change()
+    else:
+        invalidate_for_recipe_change(name)
+    set_cached_recipe_md(name, final_md)
     return {"status": "ok"}
 
 @app.delete("/api/recipes/{name}")
@@ -213,7 +337,19 @@ def delete_recipe(name: str, request: Request):
         dbx.files_delete_v2(recipe_folder(name))
     except:
         pass
+    invalidate_for_recipe_change(name)
     return {"status": "deleted"}
+
+@app.delete("/api/recipes/{name}/photo/{filename}")
+def delete_recipe_photo(name: str, filename: str, request: Request):
+    require_auth(request)
+    path = f"{recipe_folder(name)}/{filename}"
+    try:
+        dbx.files_delete_v2(path)
+    except dropbox.exceptions.ApiError:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    invalidate_for_recipe_change(name)
+    return {"status": "photo deleted"}
 
 # --------------------------
 # DELETE TAG (RESTORED)
@@ -242,12 +378,41 @@ def delete_tag(tag: str, request: Request):
                     recipe_md_path(name),
                     mode=dropbox.files.WriteMode.overwrite,
                 )
+                clear_recipe_md_cache(name)
 
+    clear_recipes_cache()
     return {"status": "tag deleted"}
 
 @app.get("/api/photos/{recipe}/{filename}")
 def get_photo(recipe: str, filename: str, request: Request):
     require_auth(request)
     path = f"{RECIPES_ROOT}/{recipe}/{filename}"
+    if_none_match = request.headers.get("if-none-match")
+
+    cached = get_cached_photo(path)
+    if cached is not None:
+        headers = get_photo_cache_headers(cached["etag"])
+        if if_none_match and if_none_match == cached["etag"]:
+            return Response(status_code=304, headers=headers)
+        return StreamingResponse(
+            io.BytesIO(cached["content"]),
+            media_type=cached["media_type"],
+            headers=headers,
+        )
+
+    metadata = dbx.files_get_metadata(path)
+    etag = f"\"{getattr(metadata, 'rev', '')}\""
+    headers = get_photo_cache_headers(etag)
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers=headers)
+
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     _, res = dbx.files_download(path)
-    return StreamingResponse(io.BytesIO(res.content), media_type="image/jpeg")
+    content = res.content
+    set_cached_photo(path, content, media_type, etag)
+
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=media_type,
+        headers=headers,
+    )
