@@ -37,8 +37,7 @@
   <!-- MOBILE TOPBAR -->
   <div class="mobile-topbar app-header">
     <button class="mobile-menu-btn app-header-btn" onclick="openMobileSidebar()" aria-label="Open tags">☰</button>
-    <div class="mobile-title app-title">Recipes</div>
-    <button class="app-header-btn" onclick="openImport()" aria-label="Add recipe">＋</button>
+    <input id="search-mobile" placeholder="Search recipes" aria-label="Search recipes">
   </div>
 
   <!-- SIDEBAR -->
@@ -58,11 +57,16 @@
 
   <!-- MAIN -->
   <div class="main">
-
     <div id="grid-controls">
       <button id="btn-select" onclick="toggleSelectionMode()">Select</button>
       <button onclick="setGrid()" id="btn-grid">Grid</button>
       <button onclick="setList()" id="btn-list">List</button>
+      <select id="sort-mode" aria-label="Sort recipes">
+        <option value="alpha-asc">A to Z</option>
+        <option value="alpha-desc">Z to A</option>
+        <option value="date-desc">Date Added (Newest)</option>
+        <option value="date-asc">Date Added (Oldest)</option>
+      </select>
     </div>
 
     <div id="bulk-toolbar" class="bulk-toolbar hidden">
@@ -110,7 +114,7 @@
     <label for="photo-input" style="font-size:12px; color:#475569;">Photo (optional)</label>
     <input type="file" id="photo-input" accept="image/*">
 
-    <div style="display:flex; justify-content:flex-end; gap:10px;">
+    <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:10px;">
       <button onclick="closeModal()">Cancel</button>
       <button onclick="saveRecipe()">Save</button>
     </div>
@@ -126,6 +130,13 @@
 
 <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
 
+<div id="image-lightbox" class="image-lightbox hidden" aria-hidden="true" onclick="closeImageLightbox()">
+  <div class="image-lightbox-inner" onclick="event.stopPropagation()">
+    <button type="button" class="image-lightbox-close" aria-label="Close image" onclick="closeImageLightbox()">✕</button>
+    <img id="image-lightbox-img" alt="Recipe image">
+  </div>
+</div>
+
 <script>
 const API = "/api";
 const DEFAULT_RECIPE_IMAGE = "/razz.png";
@@ -140,6 +151,9 @@ let pendingRequests = 0;
 let loadingTimer = null;
 let loadingShownAt = 0;
 let splashDismissed = false;
+let ingredientScaleNodes = [];
+let recipeScaleFactor = 1;
+let sortMode = "alpha-asc";
 
 async function api(url, options={}) {
   const { skipLoading, loadingMessage, ...fetchOptions } = options;
@@ -202,8 +216,10 @@ function recipeImageSrc(name, cover, thumb = false) {
 }
 
 function clearSearch() {
-  const search = document.getElementById("search");
-  search.value = "";
+  const desktopSearch = document.getElementById("search");
+  const mobileSearch = document.getElementById("search-mobile");
+  if (desktopSearch) desktopSearch.value = "";
+  if (mobileSearch) mobileSearch.value = "";
   renderFromSearch();
 }
 
@@ -302,6 +318,43 @@ function showToast(message, type = "info") {
   }, 2400);
 }
 
+function openImageLightbox(src, alt = "Recipe image") {
+  if (!src) return;
+  const box = document.getElementById("image-lightbox");
+  const img = document.getElementById("image-lightbox-img");
+  if (!box || !img) return;
+  img.src = src;
+  img.alt = alt;
+  box.classList.remove("hidden");
+  box.classList.add("visible");
+  box.setAttribute("aria-hidden", "false");
+  document.body.classList.add("lightbox-open");
+}
+
+function closeImageLightbox() {
+  const box = document.getElementById("image-lightbox");
+  const img = document.getElementById("image-lightbox-img");
+  if (!box) return;
+  box.classList.remove("visible");
+  box.classList.add("hidden");
+  box.setAttribute("aria-hidden", "true");
+  if (img) img.removeAttribute("src");
+  document.body.classList.remove("lightbox-open");
+}
+
+function closeMobileRecipeMenu() {
+  const menu = document.getElementById("mobile-recipe-menu");
+  if (!menu) return;
+  menu.classList.add("hidden");
+}
+
+function toggleMobileRecipeMenu(event) {
+  if (event) event.stopPropagation();
+  const menu = document.getElementById("mobile-recipe-menu");
+  if (!menu) return;
+  menu.classList.toggle("hidden");
+}
+
 function bindTap(element, handler) {
   if ("PointerEvent" in window) {
     element.addEventListener("pointerup", (event) => {
@@ -379,7 +432,9 @@ function activateMobileTab(tab) {
   if (tab === "search") {
     goBack();
     setActiveTab("search");
-    const search = document.getElementById("search");
+    const search = window.matchMedia("(max-width: 768px)").matches
+      ? document.getElementById("search-mobile")
+      : document.getElementById("search");
     search.focus();
     search.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
@@ -556,12 +611,55 @@ async function loadRemainingRecipePages(startOffset) {
 }
 
 function renderFromSearch() {
-  const q = document.getElementById("search").value.toLowerCase();
+  const mobileSearch = document.getElementById("search-mobile");
+  const desktopSearch = document.getElementById("search");
+  const q = window.matchMedia("(max-width: 768px)").matches
+    ? (mobileSearch?.value || "").toLowerCase()
+    : (desktopSearch?.value || "").toLowerCase();
   renderRecipes(allRecipes.filter(r => r.name.toLowerCase().includes(q)));
 }
 
+function parseCreatedAt(value) {
+  const time = Date.parse(value || "");
+  return Number.isFinite(time) ? time : null;
+}
+
+function sortRecipes(recipes) {
+  const items = [...recipes];
+  const byNameAsc = (a, b) => a.name.localeCompare(b.name);
+
+  if (sortMode === "alpha-desc") {
+    return items.sort((a, b) => b.name.localeCompare(a.name));
+  }
+  if (sortMode === "date-desc") {
+    return items.sort((a, b) => {
+      const aTime = parseCreatedAt(a.created_at);
+      const bTime = parseCreatedAt(b.created_at);
+      if (aTime === null && bTime === null) return byNameAsc(a, b);
+      if (aTime === null) return 1;
+      if (bTime === null) return -1;
+      if (bTime !== aTime) return bTime - aTime;
+      return byNameAsc(a, b);
+    });
+  }
+  if (sortMode === "date-asc") {
+    return items.sort((a, b) => {
+      const aTime = parseCreatedAt(a.created_at);
+      const bTime = parseCreatedAt(b.created_at);
+      if (aTime === null && bTime === null) return byNameAsc(a, b);
+      if (aTime === null) return 1;
+      if (bTime === null) return -1;
+      if (aTime !== bTime) return aTime - bTime;
+      return byNameAsc(a, b);
+    });
+  }
+  return items.sort(byNameAsc);
+}
+
 function renderRecipes(recipes) {
-  visibleRecipes = recipes;
+  const sortedRecipes = sortRecipes(recipes);
+  visibleRecipes = sortedRecipes;
+  document.body.classList.remove("mobile-recipe-open");
   document.getElementById("recipe-detail").classList.add("hidden");
   document.getElementById("grid-controls").style.display = "flex";
   document.getElementById("recipe-grid").classList.remove("hidden");
@@ -569,7 +667,7 @@ function renderRecipes(recipes) {
   const grid = document.getElementById("recipe-grid");
   grid.innerHTML = "";
 
-  if (!recipes.length) {
+  if (!sortedRecipes.length) {
     const hasLibrary = allRecipes.length > 0;
     grid.innerHTML = hasLibrary
       ? `
@@ -594,7 +692,7 @@ function renderRecipes(recipes) {
     return;
   }
 
-  recipes.forEach(r => {
+  sortedRecipes.forEach(r => {
     const card = document.createElement("div");
     const selected = selectedRecipes.has(r.name);
     card.className = `recipe-card ${selectionMode ? "selectable" : ""} ${selected ? "is-selected" : ""}`;
@@ -690,26 +788,90 @@ async function openRecipe(name) {
   md = md.replace(/^#+\s+.*\n?/, "");
 
   const recipe = allRecipes.find(r => r.name === name);
+  const isMobileView = window.matchMedia("(max-width: 768px)").matches;
   const html = marked.parse(md);
 
   document.getElementById("grid-controls").style.display = "none";
   document.getElementById("recipe-grid").classList.add("hidden");
   document.getElementById("recipe-detail").classList.remove("hidden");
+  document.body.classList.add("mobile-recipe-open");
 
-  document.getElementById("recipe-detail").innerHTML = `
-    <div class="detail-sticky">
-      <button class="back-btn" onclick="goBack()">← Back</button>
-      <div class="detail-sticky-title">${name}</div>
-      <button onclick="printRecipe()">🖨️</button>
+  const stickyScale = isMobileView ? `
+      <select id="recipe-scale-select-mobile" class="mobile-scale-inline" aria-label="Scale recipe" onchange="applyRecipeScale(Number(this.value))">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="1.75">1.75x</option>
+        <option value="2">2x</option>
+        <option value="2.5">2.5x</option>
+        <option value="3">3x</option>
+        <option value="4">4x</option>
+      </select>
+  ` : "";
+  const stickyActions = isMobileView
+    ? `
+      <div class="detail-sticky-menu">
+        <button type="button" class="sticky-menu-btn" aria-label="Recipe actions" onclick="toggleMobileRecipeMenu(event)">⋯</button>
+        <div id="mobile-recipe-menu" class="mobile-recipe-menu hidden" onclick="event.stopPropagation()">
+          <button type="button" onclick="closeMobileRecipeMenu(); printRecipe();">Print</button>
+          <button type="button" onclick='closeMobileRecipeMenu(); editRecipe(${JSON.stringify(name)});'>Edit</button>
+          <button type="button" class="danger" onclick='closeMobileRecipeMenu(); deleteRecipe(${JSON.stringify(name)});'>Delete</button>
+        </div>
+      </div>
+    `
+    : `<button onclick="printRecipe()">🖨️</button>`;
+  const mobileScaleBar = isMobileView ? `
+    <div class="mobile-scale-row">
+      <span>Scale</span>
+      ${stickyScale}
+      <span id="recipe-scale-label-mobile" class="mobile-scale-label">1x</span>
     </div>
+  ` : "";
 
+  const detailHeader = isMobileView ? `
+    <div class="detail-header hidden">
+      <h1>${name}</h1>
+    </div>
+  ` : `
     <div class="detail-header">
       <h1>${name}</h1>
+      <div class="detail-scale-control">
+        <label for="recipe-scale-input">Scale</label>
+        <input id="recipe-scale-input" type="number" min="0.25" max="10" step="0.25" value="1">
+        <select id="recipe-scale-select" aria-label="Scale recipe" onchange="applyRecipeScale(Number(this.value))">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.75">1.75x</option>
+          <option value="2">2x</option>
+          <option value="2.5">2.5x</option>
+          <option value="3">3x</option>
+          <option value="4">4x</option>
+        </select>
+        <span id="recipe-scale-label">1x</span>
+      </div>
       <div class="detail-icons">
         <button id="detail-edit-btn">✏️</button>
         <button id="detail-delete-btn">🗑️</button>
       </div>
     </div>
+  `;
+
+  document.getElementById("recipe-detail").innerHTML = `
+    <div class="detail-sticky">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="detail-sticky-title">${name}</div>
+      ${stickyActions}
+    </div>
+
+    ${detailHeader}
+    ${mobileScaleBar}
 
     <div class="detail-body">
       <div class="detail-image-wrap">
@@ -720,13 +882,48 @@ async function openRecipe(name) {
     </div>
   `;
 
+  const recipeDetail = document.getElementById("recipe-detail");
+  if (isMobileView) {
+    recipeDetail.querySelectorAll(".mobile-hero-controls, .mobile-hero-actions, .mobile-hero-fade, .mobile-hero-text").forEach((el) => el.remove());
+    const visibleDetailHeader = recipeDetail.querySelector(".detail-header:not(.hidden)");
+    if (visibleDetailHeader) visibleDetailHeader.remove();
+    recipeDetail.querySelectorAll(".detail-scale-control").forEach((el) => el.remove());
+    recipeDetail.querySelectorAll(".detail-icons").forEach((el) => el.remove());
+  } else {
+    recipeDetail.querySelectorAll("#recipe-scale-select-mobile").forEach((el) => el.remove());
+  }
+
+  setupRecipeScaling();
   wrapInstructionsSection();
-  document.getElementById("detail-edit-btn").onclick = () => editRecipe(name);
-  document.getElementById("detail-delete-btn").onclick = () => deleteRecipe(name);
+  const editBtn = document.getElementById("detail-edit-btn");
+  const deleteBtn = document.getElementById("detail-delete-btn");
+  if (editBtn) editBtn.onclick = () => editRecipe(name);
+  if (deleteBtn) deleteBtn.onclick = () => deleteRecipe(name);
+  const detailImage = document.querySelector("#recipe-detail .detail-image");
+  if (detailImage) {
+    detailImage.classList.add("is-zoomable");
+    detailImage.addEventListener("click", () => {
+      if (detailImage.classList.contains("is-fallback")) return;
+      openImageLightbox(detailImage.getAttribute("src"), `${name} photo`);
+    });
+  }
+
+  const scrollToRecipeTop = () => {
+    const main = document.querySelector(".main");
+    if (main) main.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+  scrollToRecipeTop();
+  requestAnimationFrame(scrollToRecipeTop);
 }
 
 function goBack() {
   currentRecipe = null;
+  closeMobileRecipeMenu();
+  closeImageLightbox();
+  document.body.classList.remove("mobile-recipe-open");
   setActiveTab("recipes");
   renderRecipes(allRecipes);
 }
@@ -936,6 +1133,327 @@ function wrapInstructionsSection() {
   }
 }
 
+function parseQuantityToken(token) {
+  const raw = (token || "").trim();
+  if (!raw) return null;
+  const fractionMap = {
+    "¼": "1/4",
+    "½": "1/2",
+    "¾": "3/4",
+    "⅐": "1/7",
+    "⅑": "1/9",
+    "⅒": "1/10",
+    "⅓": "1/3",
+    "⅔": "2/3",
+    "⅕": "1/5",
+    "⅖": "2/5",
+    "⅗": "3/5",
+    "⅘": "4/5",
+    "⅙": "1/6",
+    "⅚": "5/6",
+    "⅛": "1/8",
+    "⅜": "3/8",
+    "⅝": "5/8",
+    "⅞": "7/8"
+  };
+
+  let normalized = raw
+    .replace(/(\d)([¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, "$1 $2")
+    .replace(/[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]/g, (ch) => fractionMap[ch] || ch)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/^\d+\s+\d+\/\d+$/.test(normalized)) {
+    const [whole, frac] = normalized.split(/\s+/);
+    const [num, den] = frac.split("/").map(Number);
+    if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return null;
+    return Number(whole) + (num / den);
+  }
+  if (/^\d+\/\d+$/.test(normalized)) {
+    const [num, den] = normalized.split("/").map(Number);
+    if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return null;
+    return num / den;
+  }
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+function gcd(a, b) {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y) [x, y] = [y, x % y];
+  return x || 1;
+}
+
+function formatScaledQuantity(value) {
+  if (!Number.isFinite(value)) return "";
+  if (Math.abs(value - Math.round(value)) < 1e-6) return String(Math.round(value));
+
+  const rounded = Math.round(value * 8) / 8;
+  if (rounded <= 0) return value.toFixed(2).replace(/\.?0+$/, "");
+  const whole = Math.floor(rounded + 1e-8);
+  let numer = Math.round((rounded - whole) * 8);
+  let denom = 8;
+
+  if (numer === 0) return String(whole);
+  const div = gcd(numer, denom);
+  numer /= div;
+  denom /= div;
+
+  if (whole === 0) return `${numer}/${denom}`;
+  return `${whole} ${numer}/${denom}`;
+}
+
+const QUANTITY_TOKEN_PATTERN = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?|[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]|\\d+[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])";
+const LINE_PREFIX_PATTERN = "(\\s*(?:[-*•]\\s+)?)";
+
+function extractLeadingQuantity(line) {
+  const rangeRegex = new RegExp(`^${LINE_PREFIX_PATTERN}(${QUANTITY_TOKEN_PATTERN})(\\s*(?:-|to)\\s*)(${QUANTITY_TOKEN_PATTERN})(\\s+.+)?$`, "i");
+  const rangeMatch = line.match(rangeRegex);
+  if (rangeMatch) {
+    return {
+      kind: "range",
+      prefix: rangeMatch[1],
+      first: rangeMatch[2],
+      separator: rangeMatch[3],
+      second: rangeMatch[4],
+      suffix: rangeMatch[5] || ""
+    };
+  }
+
+  const singleRegex = new RegExp(`^${LINE_PREFIX_PATTERN}(${QUANTITY_TOKEN_PATTERN})(\\s+.+)?$`);
+  const singleMatch = line.match(singleRegex);
+  if (singleMatch) {
+    return {
+      kind: "single",
+      prefix: singleMatch[1],
+      first: singleMatch[2],
+      suffix: singleMatch[3] || ""
+    };
+  }
+
+  return null;
+}
+
+function hasScalableQuantity(line) {
+  const parts = String(line || "").split(/\r?\n/);
+  for (const part of parts) {
+    const parsed = extractLeadingQuantity(part.trim());
+    if (!parsed) continue;
+    if (parsed.kind === "range") {
+      if (parseQuantityToken(parsed.first) !== null && parseQuantityToken(parsed.second) !== null) return true;
+      continue;
+    }
+    if (parseQuantityToken(parsed.first) !== null) return true;
+  }
+  return false;
+}
+
+function scaleIngredientLine(line, factor) {
+  const parsed = extractLeadingQuantity(line);
+  if (!parsed) return line;
+
+  if (parsed.kind === "range") {
+    const low = parseQuantityToken(parsed.first);
+    const high = parseQuantityToken(parsed.second);
+    if (low === null || high === null) return line;
+    return `${parsed.prefix}${formatScaledQuantity(low * factor)}${parsed.separator}${formatScaledQuantity(high * factor)}${parsed.suffix}`;
+  }
+
+  const amount = parseQuantityToken(parsed.first);
+  if (amount === null) return line;
+  return `${parsed.prefix}${formatScaledQuantity(amount * factor)}${parsed.suffix}`;
+}
+
+function scaleIngredientTextBlock(text, factor) {
+  const source = String(text || "");
+  return source
+    .split(/\r?\n/)
+    .map((line) => scaleIngredientLine(line, factor))
+    .join("\n");
+}
+
+function ingredientIconForText(text) {
+  const raw = String(text || "").toLowerCase();
+  const normalized = raw
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "🍽️";
+
+  const matches = (terms) => terms.some((term) => normalized.includes(term));
+  if (matches(["beef", "steak", "ground beef", "brisket", "veal", "lamb", "pork", "bacon", "ham", "sausage", "turkey", "chicken"])) return "🍖";
+  if (matches(["fish", "salmon", "tuna", "shrimp", "cod", "tilapia", "crab", "lobster"])) return "🐟";
+  if (matches(["egg", "eggs"])) return "🥚";
+  if (matches(["milk", "cream", "cheese", "butter", "yogurt", "mozzarella", "parmesan", "cheddar"])) return "🧀";
+  if (matches(["flour", "bread", "rice", "pasta", "noodle", "oats", "quinoa", "tortilla"])) return "🌾";
+  if (matches(["tomato", "pepper", "onion", "garlic", "carrot", "celery", "broccoli", "spinach", "lettuce", "zucchini", "cucumber", "potato", "mushroom", "corn"])) return "🥕";
+  if (matches(["apple", "banana", "berry", "berries", "strawberry", "blueberry", "lemon", "lime", "orange", "avocado", "grape", "mango", "pineapple"])) return "🍎";
+  if (matches(["sugar", "honey", "maple", "syrup", "vanilla", "cinnamon", "cocoa", "chocolate"])) return "🍯";
+  if (matches(["salt", "pepper", "paprika", "cumin", "oregano", "thyme", "rosemary", "basil", "spice", "seasoning"])) return "🧂";
+  if (matches(["oil", "olive oil", "canola", "vegetable oil", "sesame oil", "vinegar"])) return "🫒";
+  if (matches(["water", "broth", "stock", "wine", "beer", "juice"])) return "🥣";
+  return "🍽️";
+}
+
+function renderIngredientNode(node, lineText) {
+  if (!node) return;
+  const line = String(lineText || "").trim();
+  if (!line) {
+    node.textContent = lineText || "";
+    return;
+  }
+  node.textContent = `${ingredientIconForText(line)} ${line}`;
+}
+
+function findIngredientLineNodes(markdown) {
+  const collectSectionLines = (startHeading) => {
+    const lines = [];
+    let node = startHeading?.nextElementSibling || null;
+    while (node && !/^H[23]$/.test(node.tagName)) {
+      if (node.tagName === "UL" || node.tagName === "OL") {
+        lines.push(...node.querySelectorAll("li"));
+      } else if (node.tagName === "P") {
+        lines.push(node);
+      }
+      node = node.nextElementSibling;
+    }
+    return lines;
+  };
+
+  const headings = [...markdown.querySelectorAll("h2, h3")];
+  let heading = null;
+  for (const h of headings) {
+    const title = (h.textContent || "").trim().toLowerCase().replace(/[:\s]+$/g, "");
+    if (title === "ingredients" || title === "ingredient") {
+      heading = h;
+      break;
+    }
+  }
+  if (heading) {
+    const sectionLines = collectSectionLines(heading);
+    if (sectionLines.length) return sectionLines;
+  }
+
+  // Fallback for recipes without an "Ingredients" heading:
+  // gather lines before steps/instructions and keep only quantity-led lines.
+  const isStepsHeading = (text) => {
+    const t = (text || "").trim().toLowerCase().replace(/[:\s]+$/g, "");
+    return t === "steps" || t === "step" || t === "instructions" || t === "directions" || t === "method";
+  };
+
+  let stopAt = null;
+  for (const h of headings) {
+    if (isStepsHeading(h.textContent)) {
+      stopAt = h;
+      break;
+    }
+  }
+
+  const fallback = [];
+  for (const node of [...markdown.children]) {
+    if (stopAt && node === stopAt) break;
+    if (node.tagName === "UL" || node.tagName === "OL") {
+      fallback.push(...node.querySelectorAll("li"));
+    } else if (node.tagName === "P") {
+      fallback.push(node);
+    }
+  }
+
+  return fallback.filter((node) => hasScalableQuantity((node.textContent || "").trim()));
+}
+
+function applyRecipeScale(factor) {
+  const safeFactor = Math.max(0.25, factor || 1);
+  recipeScaleFactor = safeFactor;
+  const label = document.getElementById("recipe-scale-label");
+  const mobileLabel = document.getElementById("recipe-scale-label-mobile");
+  const input = document.getElementById("recipe-scale-input");
+  const select = document.getElementById("recipe-scale-select");
+  const mobileSelect = document.getElementById("recipe-scale-select-mobile");
+  const formattedFactor = safeFactor.toFixed(2).replace(/\.?0+$/, "");
+  if (label) {
+    label.textContent = `${formattedFactor}x`;
+  }
+  if (mobileLabel) {
+    mobileLabel.textContent = `${formattedFactor}x`;
+  }
+
+  if (input && document.activeElement !== input) {
+    input.value = formattedFactor;
+  }
+
+  if (select && document.activeElement !== select) {
+    const match = [...select.options].find((option) => option.value === formattedFactor);
+    if (match) {
+      select.value = match.value;
+    }
+  }
+
+  if (mobileSelect && document.activeElement !== mobileSelect) {
+    const match = [...mobileSelect.options].find((option) => option.value === formattedFactor);
+    if (match) {
+      mobileSelect.value = match.value;
+    }
+  }
+
+  ingredientScaleNodes.forEach((node) => {
+    const original = node.dataset.originalIngredientLine || node.textContent || "";
+    const scaled = scaleIngredientTextBlock(original, safeFactor);
+    renderIngredientNode(node, scaled);
+  });
+}
+
+function setupRecipeScaling() {
+  ingredientScaleNodes = [];
+  recipeScaleFactor = 1;
+
+  const detail = document.getElementById("recipe-detail");
+  const markdown = detail?.querySelector(".markdown-content");
+  const input = document.getElementById("recipe-scale-input");
+  const select = document.getElementById("recipe-scale-select");
+  const mobileSelect = document.getElementById("recipe-scale-select-mobile");
+  const label = document.getElementById("recipe-scale-label");
+  if (!markdown || (!input && !mobileSelect)) return;
+
+  const lineNodes = findIngredientLineNodes(markdown)
+    .filter((node) => !!(node.textContent || "").trim());
+
+  lineNodes.forEach((node) => {
+    node.dataset.originalIngredientLine = node.textContent;
+    renderIngredientNode(node, node.dataset.originalIngredientLine);
+  });
+  ingredientScaleNodes = lineNodes;
+
+  if (input) input.value = "1";
+  if (select) select.value = "1";
+  if (mobileSelect) mobileSelect.value = "1";
+  if (label) label.textContent = "1x";
+  if (input) {
+    input.addEventListener("input", () => {
+      const next = Number(input.value);
+      if (!Number.isFinite(next) || next <= 0) return;
+      applyRecipeScale(next);
+    });
+  }
+  if (select) {
+    select.addEventListener("change", () => {
+      const next = Number(select.value);
+      if (!Number.isFinite(next) || next <= 0) return;
+      applyRecipeScale(next);
+    });
+  }
+  if (mobileSelect) {
+    mobileSelect.addEventListener("change", () => {
+      const next = Number(mobileSelect.value);
+      if (!Number.isFinite(next) || next <= 0) return;
+      applyRecipeScale(next);
+    });
+  }
+
+  applyRecipeScale(1);
+}
+
 function printRecipe() {
   computePrintScale();
   window.print();
@@ -1105,10 +1623,32 @@ async function disableServiceWorkers() {
   }
 }
 
-document.getElementById("search").addEventListener("input", e=>{
+const desktopSearchInput = document.getElementById("search");
+const mobileSearchInput = document.getElementById("search-mobile");
+
+desktopSearchInput.addEventListener("input", (e) => {
+  if (mobileSearchInput && mobileSearchInput.value !== e.target.value) {
+    mobileSearchInput.value = e.target.value;
+  }
   setActiveTab("search");
   const q = e.target.value.toLowerCase();
-  renderRecipes(allRecipes.filter(r => r.name.toLowerCase().includes(q)));
+  renderRecipes(allRecipes.filter((r) => r.name.toLowerCase().includes(q)));
+});
+
+if (mobileSearchInput) {
+  mobileSearchInput.addEventListener("input", (e) => {
+    if (desktopSearchInput && desktopSearchInput.value !== e.target.value) {
+      desktopSearchInput.value = e.target.value;
+    }
+    setActiveTab("search");
+    const q = e.target.value.toLowerCase();
+    renderRecipes(allRecipes.filter((r) => r.name.toLowerCase().includes(q)));
+  });
+}
+
+document.getElementById("sort-mode").addEventListener("change", (e) => {
+  sortMode = e.target.value || "alpha-asc";
+  renderFromSearch();
 });
 
 document.getElementById("recipe-tags").addEventListener("input", renderTagSuggestions);
@@ -1119,6 +1659,17 @@ document.getElementById("recipe-tags").addEventListener("blur", () => {
 document.getElementById("source-input").addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   importSourceFile(file);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeImageLightbox();
+    closeMobileRecipeMenu();
+  }
+});
+
+document.addEventListener("click", () => {
+  closeMobileRecipeMenu();
 });
 
 /* Close mobile sidebar if rotating to desktop */

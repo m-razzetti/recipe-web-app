@@ -8,7 +8,9 @@
   background: rgba(0,0,0,0.5);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) 10px max(12px, env(safe-area-inset-bottom));
+  overflow-y: auto;
   z-index: 9999;
 }
 
@@ -26,8 +28,12 @@
   padding: 24px;
   width: 600px;
   max-width: 95%;
+  max-height: calc(100vh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  margin: auto 0;
+  overscroll-behavior: contain;
 }
 
 .modal-content input,
@@ -40,4 +46,21 @@
 
 .modal-content textarea {
   resize: vertical;
+}
+
+.modal-actions {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid #eef2f7;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: min(100%, 680px);
+    border-radius: 14px;
+    padding: 14px;
+  }
 }

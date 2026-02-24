@@ -291,13 +291,19 @@ def load_recipe_index() -> list[dict] | None:
         return None
 
     normalized = []
+    has_legacy_created_at = False
     for item in raw:
         if not isinstance(item, dict):
             continue
+        if "created_at" in item:
+            has_legacy_created_at = True
         entry = normalize_recipe_item(item)
         if entry:
             normalized.append(entry)
-    return sort_recipes(normalized)
+    normalized = sort_recipes(normalized)
+    if has_legacy_created_at:
+        save_recipe_index(normalized)
+    return normalized
 
 def save_recipe_index(items: list[dict]):
     payload = json.dumps(sort_recipes(items), separators=(",", ":")).encode("utf-8")
@@ -315,6 +321,23 @@ def list_recipe_root_entries():
         entries.extend(result.entries)
     return entries
 
+def get_recipe_modified_dates() -> dict[str, str]:
+    cached = get_cached_recipe_dates()
+    if cached is not None:
+        return cached
+
+    modified = {}
+    for entry in list_recipe_root_entries():
+        if not isinstance(entry, dropbox.files.FileMetadata):
+            continue
+        if not entry.name.endswith(".md"):
+            continue
+        name = entry.name[:-3]
+        if hasattr(entry, "server_modified"):
+            modified[name] = entry.server_modified.isoformat()
+    set_cached_recipe_dates(modified)
+    return modified
+
 def build_recipe_index_from_dropbox() -> list[dict]:
     entries = list_recipe_root_entries()
     folder_names = {e.name for e in entries if isinstance(e, dropbox.files.FolderMetadata)}
@@ -327,7 +350,6 @@ def build_recipe_index_from_dropbox() -> list[dict]:
         name = entry.name[:-3]
         _, res = dbx.files_download(recipe_md_path(name))
         md = res.content.decode("utf-8")
-
         cover = None
         if name in folder_names:
             try:
@@ -355,10 +377,12 @@ RECIPES_CACHE_TTL = timedelta(seconds=20)
 RECIPE_MD_CACHE_TTL = timedelta(seconds=60)
 PHOTO_CACHE_TTL = timedelta(minutes=15)
 PHOTO_CACHE_MAX_ITEMS = 128
+RECIPE_DATES_CACHE_TTL = timedelta(seconds=20)
 
 recipes_cache = {"value": None, "expires_at": datetime.min}
 recipe_md_cache: dict[str, tuple[str, datetime]] = {}
 photo_cache: OrderedDict[str, dict] = OrderedDict()
+recipe_dates_cache = {"value": None, "expires_at": datetime.min}
 
 def cache_fresh(expires_at: datetime) -> bool:
     return datetime.utcnow() < expires_at
@@ -375,6 +399,19 @@ def set_cached_recipes(data):
 def clear_recipes_cache():
     recipes_cache["value"] = None
     recipes_cache["expires_at"] = datetime.min
+
+def get_cached_recipe_dates():
+    if recipe_dates_cache["value"] is not None and cache_fresh(recipe_dates_cache["expires_at"]):
+        return recipe_dates_cache["value"]
+    return None
+
+def set_cached_recipe_dates(data):
+    recipe_dates_cache["value"] = data
+    recipe_dates_cache["expires_at"] = datetime.utcnow() + RECIPE_DATES_CACHE_TTL
+
+def clear_recipe_dates_cache():
+    recipe_dates_cache["value"] = None
+    recipe_dates_cache["expires_at"] = datetime.min
 
 def get_cached_recipe_md(name: str):
     entry = recipe_md_cache.get(name)
@@ -432,6 +469,7 @@ def clear_photo_cache(recipe: str | None = None):
 
 def invalidate_for_recipe_change(name: str | None = None):
     clear_recipes_cache()
+    clear_recipe_dates_cache()
     clear_photo_cache(name)
     clear_recipe_md_cache(name)
 
@@ -505,11 +543,19 @@ def list_recipes(
     safe_offset = max(0, offset)
     safe_limit = min(max(1, limit), 200)
     page = filtered[safe_offset:safe_offset + safe_limit]
+    modified_dates = get_recipe_modified_dates()
+    page_with_dates = [
+        {
+            **item,
+            "created_at": modified_dates.get(item["name"]),
+        }
+        for item in page
+    ]
 
     next_offset = safe_offset + len(page)
     response.headers["X-Total-Count"] = str(len(filtered))
     response.headers["X-Next-Offset"] = str(next_offset) if next_offset < len(filtered) else ""
-    return page
+    return page_with_dates
 
 @app.get("/api/recipes/{name}", response_class=PlainTextResponse)
 def get_recipe(name: str, request: Request):

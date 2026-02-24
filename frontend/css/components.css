@@ -47,6 +47,14 @@ button:hover {
   border: 1px solid #e5e7eb;
 }
 
+#grid-controls select {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+}
+
 #grid-controls button.active {
   background: linear-gradient(135deg, #0f766e, #0b5d57);
   color: white;

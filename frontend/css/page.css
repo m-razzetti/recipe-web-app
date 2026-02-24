@@ -61,7 +61,55 @@ body {
   display:flex;
   justify-content:space-between;
   align-items:center;
+  gap: 12px;
   margin-bottom:20px;
+}
+
+.detail-header h1 {
+  margin: 0;
+}
+
+.detail-scale-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.detail-scale-control label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.detail-scale-control input {
+  width: 72px;
+  padding: 4px 6px;
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detail-scale-control select {
+  display: none;
+  width: 84px;
+  padding: 4px 6px;
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detail-scale-control span {
+  min-width: 26px;
+  font-weight: 700;
+  text-align: right;
 }
 
 .detail-icons {
@@ -90,6 +138,10 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mobile-scale-inline {
+  display: none;
 }
 
 .detail-body {
@@ -125,6 +177,148 @@ body {
 .detail-image.is-fallback {
   object-fit: contain;
   background: var(--surface);
+}
+
+.detail-image.is-zoomable {
+  cursor: zoom-in;
+}
+
+.mobile-hero-controls,
+.mobile-hero-fade,
+.mobile-hero-text {
+  display: none;
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.84);
+  z-index: 12050;
+}
+
+.image-lightbox.visible {
+  display: flex;
+}
+
+.image-lightbox-inner {
+  position: relative;
+  width: min(96vw, 1080px);
+  max-height: 94vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-lightbox img {
+  max-width: 100%;
+  max-height: 94vh;
+  border-radius: 14px;
+  box-shadow: 0 24px 44px rgba(0, 0, 0, 0.4);
+  background: #fff;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+body.lightbox-open {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .sidebar #search {
+    display: none !important;
+  }
+
+  .mobile-scale-inline {
+    display: inline-block !important;
+  }
+
+  .mobile-topbar > .app-header-btn:not(.mobile-menu-btn) {
+    display: none !important;
+  }
+
+  .detail-sticky {
+    overflow: visible;
+  }
+
+  .detail-sticky-menu {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .sticky-menu-btn {
+    width: 42px;
+    height: 36px;
+    border-radius: 999px;
+    padding: 0;
+    border: 1px solid #d7dde7;
+    background: #f0f2f5;
+    color: #111827;
+    font-size: 22px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-recipe-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 148px;
+    background: #fff;
+    border: 1px solid #d7dde7;
+    border-radius: 12px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+    padding: 4px;
+  }
+
+  .mobile-recipe-menu:not(.hidden) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mobile-recipe-menu button {
+    all: unset;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+    color: #111827;
+    text-align: left;
+    padding: 9px 10px;
+    font-size: 14px;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .mobile-recipe-menu button.danger {
+    color: #b91c1c;
+  }
+
+  .mobile-recipe-menu button:active {
+    background: #f1f5f9;
+  }
 }
 
 .detail-image-delete {

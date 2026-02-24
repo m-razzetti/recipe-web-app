@@ -4,7 +4,7 @@
 
 @page {
   size: Letter portrait;
-  margin: 0.35in;
+  margin: 0;
 }
 
 @media print {
@@ -28,8 +28,11 @@
 
   .sidebar,
   .mobile-topbar,
+  .mobile-bottom-nav,
   .mobile-overlay,
   .detail-sticky,
+  .mobile-scale-row,
+  .detail-sticky-menu,
   #grid-controls,
   #recipe-grid,
   #modal,
@@ -44,6 +47,8 @@
     max-width: none !important;
     width: 100% !important;
     overflow: visible !important;
+    padding: 0.35in !important;
+    box-sizing: border-box !important;
     font-size: 12pt;
     line-height: 1.28;
   }
