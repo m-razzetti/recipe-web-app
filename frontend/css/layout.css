@@ -53,6 +53,11 @@
   object-fit: cover;
 }
 
+#recipe-grid.list-mode .recipe-card img.is-fallback {
+  object-fit: contain;
+  background: #fff;
+}
+
 #recipe-grid.list-mode .recipe-title {
   padding: 0 20px;
 }

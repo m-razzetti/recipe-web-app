@@ -19,6 +19,7 @@
   .app {
     display: block;
     height: auto;
+    min-height: 100vh;
   }
 
   .sidebar {
@@ -37,7 +38,7 @@
   }
 
   .main {
-    padding: 14px;
+    padding: 14px 14px calc(84px + env(safe-area-inset-bottom));
     overflow: visible;
   }
 
@@ -45,13 +46,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 12px;
     font-weight: 600;
-    border-bottom: 1px solid #eee;
-    background: #fff;
+    border-bottom: 1px solid #dbe3ef;
+    background: rgba(255, 255, 255, 0.92);
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 40;
   }
 
   .mobile-title {
@@ -66,8 +67,6 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 10px;
-    background: #f3f4f6;
   }
 
   #grid-controls {
@@ -80,11 +79,52 @@
     flex: 1;
   }
 
+  .bulk-toolbar {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .bulk-toolbar button {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 40px;
+  }
+
   .mobile-overlay {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.35);
     z-index: 20;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid #dbe3ef;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    z-index: 50;
+  }
+
+  .mobile-bottom-nav button {
+    border-radius: 12px;
+    font-size: 12px;
+    padding: 8px 0;
+    border: 1px solid #dbe3ef;
+    background: #fff;
+    color: #334155;
+  }
+
+  .mobile-bottom-nav button.is-active {
+    border-color: #0f766e;
+    color: #0f766e;
+    background: #f0fdfa;
   }
 
   body.mobile-sidebar-open .sidebar {
@@ -116,6 +156,11 @@
     width: 70px;
     height: 70px;
     border-radius: 12px;
+  }
+
+  #recipe-grid.list-mode .recipe-card img.is-fallback {
+    object-fit: contain;
+    background: #fff;
   }
 
   #recipe-grid.list-mode .recipe-title {
@@ -151,12 +196,13 @@
     float: none;
     width: 100%;
     margin: 0 0 12px 0;
-    position: static;
+    position: relative;
+    aspect-ratio: 16 / 10;
   }
 
   .detail-image {
     width: 100%;
-    height: auto;
+    height: 100%;
     border-radius: 14px;
   }
 }

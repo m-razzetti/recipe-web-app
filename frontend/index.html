@@ -2,8 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Recipes</title>
+<meta name="theme-color" content="#111827">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recipes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/razz.png">
+<link rel="apple-touch-startup-image" href="/razz.png">
 
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/layout.css">
@@ -11,256 +19,38 @@
 <link rel="stylesheet" href="/css/modal.css">
 <link rel="stylesheet" href="/css/print.css">
 <link rel="stylesheet" href="/css/mobile.css">
+<link rel="stylesheet" href="/css/page.css">
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-<style>
-.hidden { display:none !important; }
-
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(2px);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-}
-
-.loading-overlay.visible {
-  display: flex;
-}
-
-.loading-box {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-}
-
-.loading-spinner {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid #d1d5db;
-  border-top-color: #111827;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.detail-header {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:20px;
-}
-
-.detail-icons {
-  display:flex;
-  gap:10px;
-}
-
-.detail-sticky {
-  position: sticky;
-  top: 8px;
-  z-index: 9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #e5e7eb;
-  backdrop-filter: blur(4px);
-}
-
-.detail-sticky-title {
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.detail-body {
-  display: block;
-}
-
-.detail-body::after {
-  content: "";
-  display: table;
-  clear: both;
-}
-
-.detail-image-wrap {
-  float: right;
-  position: relative;
-  width: min(38%, 240px);
-  margin-left: 20px;
-  margin-bottom: 12px;
-}
-
-.detail-image {
-  width: 100%;
-  max-height: 260px;
-  object-fit: cover;
-  border-radius: 14px;
-  display: block;
-}
-
-.detail-image.is-fallback {
-  object-fit: contain;
-  background: #fff;
-}
-
-.detail-image-delete {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.95);
-  color: #111827;
-  border: 1px solid rgba(17, 24, 39, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.detail-image-delete:hover {
-  background: rgba(254, 242, 242, 0.98);
-  color: #991b1b;
-  border-color: rgba(153, 27, 27, 0.35);
-  transform: scale(1.06);
-}
-
-#recipe-detail {
-  width: 100%;
-  max-width: 1080px;
-}
-
-.markdown-content ul { margin-left:20px; }
-.markdown-content p { margin-bottom:10px; }
-
-.recipe-card { cursor:pointer; }
-
-.recipe-card img {
-  width:100%;
-  height:200px;
-  object-fit:cover;
-}
-
-.recipe-card img.is-fallback {
-  object-fit: contain;
-  background: #fff;
-}
-
-.recipe-card-meta {
-  padding: 0 14px 14px 14px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag-chip {
-  font-size: 12px;
-  line-height: 1;
-  padding: 6px 8px;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #3730a3;
-}
-
-.empty-state {
-  border: 1px dashed #d1d5db;
-  border-radius: 14px;
-  background: #fff;
-  padding: 26px;
-  text-align: center;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-}
-
-.empty-state p {
-  margin: 0 0 14px 0;
-  color: #4b5563;
-}
-
-.empty-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.empty-actions button {
-  border: 1px solid #e5e7eb;
-  background: #fff;
-}
-
-.empty-actions button.primary {
-  background: #111827;
-  border-color: #111827;
-  color: #fff;
-}
-
-.back-btn { margin-bottom:0; }
-
-/* Sidebar tag list basic spacing */
-#tag-list > div,
-#tag-list > span,
-#tag-list > a {
-  display:block;
-  margin: 6px 0;
-}
-
-#tag-list > .tag-item {
-  display: flex;
-  align-items: center;
-}
-
-#tag-list > .tag-item .tag-delete {
-  margin-left: auto;
-}
-</style>
 </head>
 
 <body>
+<div id="app-splash" class="app-splash">
+  <div class="app-splash-inner">
+    <img src="/razz.png" alt="" class="app-splash-logo">
+    <div class="app-splash-title">Recipe Library</div>
+  </div>
+</div>
+
 <div class="app">
 
   <!-- MOBILE TOPBAR -->
-  <div class="mobile-topbar">
-    <button class="mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
-    <div class="mobile-title">Recipes</div>
-    <div style="width:40px;"></div>
+  <div class="mobile-topbar app-header">
+    <button class="mobile-menu-btn app-header-btn" onclick="openMobileSidebar()" aria-label="Open tags">☰</button>
+    <div class="mobile-title app-title">Recipes</div>
+    <button class="app-header-btn" onclick="openImport()" aria-label="Add recipe">＋</button>
   </div>
 
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
-    <h2>Library</h2>
+    <img src="/razz.png" alt="Recipe Library" class="sidebar-logo">
 
     <input id="search" placeholder="Search">
 
     <h4>TAGS</h4>
     <div id="tag-list"></div>
 
-    <button onclick="openImport()">+ Import Recipe</button>
+    <button class="import-btn" onclick="openImport()">+ Import Recipe</button>
   </div>
 
   <!-- MOBILE OVERLAY (click to close) -->
@@ -270,8 +60,17 @@
   <div class="main">
 
     <div id="grid-controls">
+      <button id="btn-select" onclick="toggleSelectionMode()">Select</button>
       <button onclick="setGrid()" id="btn-grid">Grid</button>
       <button onclick="setList()" id="btn-list">List</button>
+    </div>
+
+    <div id="bulk-toolbar" class="bulk-toolbar hidden">
+      <span id="bulk-count">0 selected</span>
+      <button onclick="selectAllVisible()">Select Visible</button>
+      <button onclick="bulkAddTags()">Add Tags</button>
+      <button class="danger" onclick="bulkDeleteRecipes()">Delete</button>
+      <button onclick="clearSelection()">Clear</button>
     </div>
 
     <div id="recipe-grid"></div>
@@ -281,6 +80,21 @@
   </div>
 </div>
 
+<nav class="mobile-bottom-nav" aria-label="Primary">
+  <button id="tab-recipes" class="is-active" onclick="activateMobileTab('recipes')">
+    <span>Library</span>
+  </button>
+  <button id="tab-search" onclick="activateMobileTab('search')">
+    <span>Search</span>
+  </button>
+  <button id="tab-tags" onclick="activateMobileTab('tags')">
+    <span>Tags</span>
+  </button>
+  <button id="tab-add" onclick="activateMobileTab('add')">
+    <span>Add</span>
+  </button>
+</nav>
+
 <!-- MODAL -->
 <div id="modal" class="hidden">
   <div class="modal-content">
@@ -289,8 +103,12 @@
     <input id="recipe-name" placeholder="Recipe Name">
     <input id="recipe-original-name" type="hidden" value="">
     <input id="recipe-tags" placeholder="tags separated by space">
+    <div id="tag-suggestions" class="tag-suggestions hidden"></div>
     <textarea id="recipe-markdown" rows="15"></textarea>
-    <input type="file" id="photo-input">
+    <label for="source-input" style="font-size:12px; color:#475569;">Recipe source (.txt/.md/.pdf, auto-convert to markdown)</label>
+    <input type="file" id="source-input" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf">
+    <label for="photo-input" style="font-size:12px; color:#475569;">Photo (optional)</label>
+    <input type="file" id="photo-input" accept="image/*">
 
     <div style="display:flex; justify-content:flex-end; gap:10px;">
       <button onclick="closeModal()">Cancel</button>
@@ -306,14 +124,22 @@
   </div>
 </div>
 
+<div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+
 <script>
 const API = "/api";
 const DEFAULT_RECIPE_IMAGE = "/razz.png";
+const RECIPE_PAGE_SIZE = 60;
 let allRecipes = [];
 let currentRecipe = null;
+let selectionMode = false;
+let selectedRecipes = new Set();
+let visibleRecipes = [];
+let tagPopularity = new Map();
 let pendingRequests = 0;
 let loadingTimer = null;
 let loadingShownAt = 0;
+let splashDismissed = false;
 
 async function api(url, options={}) {
   const { skipLoading, loadingMessage, ...fetchOptions } = options;
@@ -369,15 +195,197 @@ function endLoading() {
   }
 }
 
-function recipeImageSrc(name, cover) {
+function recipeImageSrc(name, cover, thumb = false) {
   if (!cover) return DEFAULT_RECIPE_IMAGE;
-  return `/api/photos/${encodeURIComponent(name)}/${cover}`;
+  const query = thumb ? "?thumb=1" : "";
+  return `/api/photos/${encodeURIComponent(name)}/${cover}${query}`;
 }
 
 function clearSearch() {
   const search = document.getElementById("search");
   search.value = "";
-  renderRecipes(allRecipes);
+  renderFromSearch();
+}
+
+function updateBulkToolbar() {
+  const toolbar = document.getElementById("bulk-toolbar");
+  const count = selectedRecipes.size;
+  document.getElementById("bulk-count").textContent = `${count} selected`;
+  toolbar.classList.toggle("hidden", !selectionMode);
+  document.getElementById("btn-select").classList.toggle("active", selectionMode);
+  document.body.classList.toggle("selection-mode", selectionMode);
+}
+
+function toggleSelectionMode(force) {
+  const next = typeof force === "boolean" ? force : !selectionMode;
+  selectionMode = next;
+  if (!selectionMode) selectedRecipes.clear();
+  updateBulkToolbar();
+  renderFromSearch();
+}
+
+function clearSelection() {
+  selectedRecipes.clear();
+  updateBulkToolbar();
+  renderFromSearch();
+}
+
+function toggleRecipeSelection(name) {
+  if (selectedRecipes.has(name)) selectedRecipes.delete(name);
+  else selectedRecipes.add(name);
+  updateBulkToolbar();
+  renderFromSearch();
+}
+
+function selectAllVisible() {
+  visibleRecipes.forEach(r => selectedRecipes.add(r.name));
+  updateBulkToolbar();
+  renderFromSearch();
+}
+
+async function bulkAddTags() {
+  if (!selectedRecipes.size) {
+    showToast("Select at least one recipe", "error");
+    return;
+  }
+  const tags = prompt("Add tags (space or comma separated):");
+  if (!tags || !tags.trim()) return;
+
+  const res = await api(`${API}/recipes/bulk-tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ names: [...selectedRecipes], tags }),
+    loadingMessage: "Adding tags..."
+  });
+  if (!res.ok) {
+    showToast("Bulk tag update failed", "error");
+    return;
+  }
+  await loadRecipes();
+  toggleSelectionMode(false);
+  showToast("Tags updated", "success");
+}
+
+async function bulkDeleteRecipes() {
+  if (!selectedRecipes.size) {
+    showToast("Select at least one recipe", "error");
+    return;
+  }
+  if (!confirm(`Delete ${selectedRecipes.size} recipes?`)) return;
+
+  const res = await api(`${API}/recipes/bulk-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ names: [...selectedRecipes] }),
+    loadingMessage: "Deleting recipes..."
+  });
+  if (!res.ok) {
+    showToast("Bulk delete failed", "error");
+    return;
+  }
+  await loadRecipes();
+  toggleSelectionMode(false);
+  goBack();
+  showToast("Recipes deleted", "success");
+}
+
+function showToast(message, type = "info") {
+  const root = document.getElementById("toast-root");
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  root.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => toast.remove(), 180);
+  }, 2400);
+}
+
+function bindTap(element, handler) {
+  if ("PointerEvent" in window) {
+    element.addEventListener("pointerup", (event) => {
+      // Ignore right/middle clicks on desktop pointer devices.
+      if (event.button && event.button !== 0) return;
+      handler(event);
+    });
+    return;
+  }
+
+  element.addEventListener("click", (event) => {
+    handler(event);
+  });
+}
+
+function triggerHaptic() {
+  if ("vibrate" in navigator) {
+    navigator.vibrate(8);
+  }
+}
+
+function hideSplash() {
+  if (splashDismissed) return;
+  splashDismissed = true;
+  const splash = document.getElementById("app-splash");
+  splash.classList.add("hidden-out");
+  setTimeout(() => splash.remove(), 400);
+}
+
+function setupHapticFeedback() {
+  const resolveTapTarget = (event) => {
+    const raw = event.target;
+    const el = raw instanceof Element ? raw : raw?.parentElement;
+    if (!el) return null;
+    return el.closest("button, .recipe-card, .tag-item span, .tag-delete");
+  };
+
+  document.addEventListener("pointerdown", (event) => {
+    const target = resolveTapTarget(event);
+    if (!target) return;
+    target.classList.add("tap-press");
+  });
+
+  document.addEventListener("pointerup", (event) => {
+    const target = resolveTapTarget(event);
+    if (!target) return;
+    target.classList.remove("tap-press");
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = resolveTapTarget(event);
+    if (!target) return;
+    triggerHaptic();
+  });
+}
+
+function setActiveTab(tab) {
+  ["recipes", "search", "tags", "add"].forEach(name => {
+    const el = document.getElementById(`tab-${name}`);
+    if (el) el.classList.toggle("is-active", name === tab);
+  });
+}
+
+function activateMobileTab(tab) {
+  if (tab === "add") {
+    openImport();
+    setActiveTab("add");
+    return;
+  }
+  if (tab === "tags") {
+    openMobileSidebar();
+    setActiveTab("tags");
+    return;
+  }
+  if (tab === "search") {
+    goBack();
+    setActiveTab("search");
+    const search = document.getElementById("search");
+    search.focus();
+    search.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  goBack();
+  setActiveTab("recipes");
 }
 
 /* =========================
@@ -390,6 +398,9 @@ function openMobileSidebar() {
 
 function closeMobileSidebar() {
   document.body.classList.remove("mobile-sidebar-open");
+  if (document.getElementById("tab-tags")?.classList.contains("is-active")) {
+    setActiveTab("recipes");
+  }
 }
 
 /* Close sidebar after selecting a tag on mobile */
@@ -400,14 +411,157 @@ function closeSidebarIfMobile() {
 }
 
 async function loadRecipes() {
-  const res = await api(`${API}/recipes`);
-  if (!res.ok) return;
-  allRecipes = await res.json();
-  renderRecipes(allRecipes);
+  showRecipeSkeleton();
+  const firstPage = await fetchRecipePage(0, true);
+  if (!firstPage) {
+    showToast("Could not load recipes", "error");
+    hideSplash();
+    return;
+  }
+
+  allRecipes = firstPage.items;
+  rebuildTagPopularity();
+  renderFromSearch();
   renderTags();
+
+  if (firstPage.nextOffset !== null) {
+    loadRemainingRecipePages(firstPage.nextOffset);
+  }
+  hideSplash();
+}
+
+async function fetchRecipePage(offset, skipLoading = true) {
+  const res = await api(`${API}/recipes?offset=${offset}&limit=${RECIPE_PAGE_SIZE}`, { skipLoading });
+  if (!res.ok) return null;
+
+  const items = await res.json();
+  const nextOffsetHeader = res.headers.get("X-Next-Offset");
+  const nextOffset = nextOffsetHeader === null || nextOffsetHeader === ""
+    ? null
+    : Number(nextOffsetHeader);
+  return { items, nextOffset };
+}
+
+function showRecipeSkeleton(count = 8) {
+  document.getElementById("recipe-detail").classList.add("hidden");
+  document.getElementById("grid-controls").style.display = "flex";
+  const grid = document.getElementById("recipe-grid");
+  grid.classList.remove("hidden");
+  grid.classList.add("grid-mode");
+  grid.classList.remove("list-mode");
+  grid.innerHTML = "";
+  for (let i = 0; i < count; i += 1) {
+    const card = document.createElement("div");
+    card.className = "recipe-card skeleton-card";
+    card.innerHTML = `
+      <div class="skeleton skeleton-image"></div>
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line short"></div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function mergeRecipes(items) {
+  const byName = new Map(allRecipes.map(r => [r.name, r]));
+  items.forEach(item => byName.set(item.name, item));
+  allRecipes = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  rebuildTagPopularity();
+}
+
+function rebuildTagPopularity() {
+  const counts = new Map();
+  allRecipes.forEach((recipe) => {
+    (recipe.tags || []).forEach((tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  });
+  tagPopularity = counts;
+}
+
+function getTagInputState(rawValue) {
+  const endsWithSeparator = /[\s,]$/.test(rawValue);
+  const tokens = rawValue
+    .split(/[,\s]+/)
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  if (endsWithSeparator) {
+    return { currentToken: "", existingTokens: tokens };
+  }
+  const currentToken = tokens.pop() || "";
+  return { currentToken, existingTokens: tokens };
+}
+
+function hideTagSuggestions() {
+  const box = document.getElementById("tag-suggestions");
+  box.innerHTML = "";
+  box.classList.add("hidden");
+}
+
+function applyTagSuggestion(tag) {
+  const input = document.getElementById("recipe-tags");
+  const raw = input.value;
+  const nextTag = `${tag} `;
+  if (/[\s,]$/.test(raw) || raw.length === 0) {
+    input.value = `${raw}${nextTag}`;
+  } else {
+    input.value = raw.replace(/[^\s,]*$/, nextTag);
+  }
+  input.focus();
+  renderTagSuggestions();
+}
+
+function renderTagSuggestions() {
+  const box = document.getElementById("tag-suggestions");
+  const input = document.getElementById("recipe-tags");
+  const raw = input.value.trimEnd();
+  const { currentToken, existingTokens } = getTagInputState(raw);
+  const existing = new Set(existingTokens);
+
+  const candidates = [...tagPopularity.entries()]
+    .filter(([tag]) => !existing.has(tag))
+    .filter(([tag]) => !currentToken || tag.startsWith(currentToken))
+    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+    .slice(0, 7);
+
+  if (!candidates.length) {
+    hideTagSuggestions();
+    return;
+  }
+
+  box.innerHTML = "";
+  candidates.forEach(([tag, count]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tag-suggestion-item";
+    btn.innerHTML = `<span>${tag}</span><span class="tag-suggestion-count">${count}</span>`;
+    btn.onclick = () => applyTagSuggestion(tag);
+    box.appendChild(btn);
+  });
+  box.classList.remove("hidden");
+}
+
+async function loadRemainingRecipePages(startOffset) {
+  let nextOffset = startOffset;
+  while (nextOffset !== null) {
+    const page = await fetchRecipePage(nextOffset, true);
+    if (!page) return;
+    mergeRecipes(page.items);
+    renderTags();
+    if (document.getElementById("recipe-detail").classList.contains("hidden")) {
+      renderFromSearch();
+    }
+    nextOffset = page.nextOffset;
+  }
+}
+
+function renderFromSearch() {
+  const q = document.getElementById("search").value.toLowerCase();
+  renderRecipes(allRecipes.filter(r => r.name.toLowerCase().includes(q)));
 }
 
 function renderRecipes(recipes) {
+  visibleRecipes = recipes;
   document.getElementById("recipe-detail").classList.add("hidden");
   document.getElementById("grid-controls").style.display = "flex";
   document.getElementById("recipe-grid").classList.remove("hidden");
@@ -442,13 +596,15 @@ function renderRecipes(recipes) {
 
   recipes.forEach(r => {
     const card = document.createElement("div");
-    card.className = "recipe-card";
+    const selected = selectedRecipes.has(r.name);
+    card.className = `recipe-card ${selectionMode ? "selectable" : ""} ${selected ? "is-selected" : ""}`;
     const isFallback = !r.cover;
     const chips = (r.tags || []).slice(0, 3).map(t => `<span class="tag-chip">${t}</span>`).join("");
     const extraTagCount = (r.tags || []).length - 3;
 
     card.innerHTML = `
-      <img class="${isFallback ? "is-fallback" : ""}" src="${recipeImageSrc(r.name, r.cover)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
+      ${selectionMode ? `<div class="select-indicator">${selected ? "✓" : ""}</div>` : ""}
+      <img class="${isFallback ? "is-fallback" : ""}" src="${recipeImageSrc(r.name, r.cover, true)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
       <div class="recipe-title">${r.name}</div>
       <div class="recipe-card-meta">
         ${chips}
@@ -456,7 +612,13 @@ function renderRecipes(recipes) {
       </div>
     `;
 
-    card.onclick = () => openRecipe(r.name);
+    card.onclick = () => {
+      if (selectionMode) {
+        toggleRecipeSelection(r.name);
+      } else {
+        openRecipe(r.name);
+      }
+    };
     grid.appendChild(card);
   });
 }
@@ -468,21 +630,36 @@ function renderTags() {
   const tags = new Set();
   allRecipes.forEach(r => r.tags.forEach(t => tags.add(t)));
 
-  const allBtn = document.createElement("div");
+  const allBtn = document.createElement("button");
+  allBtn.type = "button";
+  allBtn.className = "tag-link-btn";
   allBtn.textContent = "All Recipes";
-  allBtn.style.cursor = "pointer";
-  allBtn.onclick = () => { renderRecipes(allRecipes); closeSidebarIfMobile(); };
+  bindTap(allBtn, () => {
+    renderFromSearch();
+    closeSidebarIfMobile();
+  });
   tagList.appendChild(allBtn);
 
   [...tags].sort().forEach(tag => {
     const div = document.createElement("div");
     div.className = "tag-item";
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "tag-link-btn";
+    name.textContent = tag;
+    bindTap(name, () => filterTag(tag));
 
-    div.innerHTML = `
-      <span onclick="filterTag('${tag}')" style="cursor:pointer;">${tag}</span>
-      <span class="tag-delete" onclick="deleteTag('${tag}')">🗑</span>
-    `;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "tag-delete";
+    del.textContent = "🗑";
+    bindTap(del, (e) => {
+      e.stopPropagation();
+      deleteTag(tag);
+    });
 
+    div.appendChild(name);
+    div.appendChild(del);
     tagList.appendChild(div);
   });
 }
@@ -493,11 +670,16 @@ function filterTag(tag) {
 }
 
 async function openRecipe(name) {
+  if (selectionMode) return;
   currentRecipe = name;
+  setActiveTab("recipes");
   closeSidebarIfMobile();
 
   const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
-  if (!res.ok) return;
+  if (!res.ok) {
+    showToast("Could not open recipe", "error");
+    return;
+  }
 
   let md = await res.text();
 
@@ -518,7 +700,7 @@ async function openRecipe(name) {
     <div class="detail-sticky">
       <button class="back-btn" onclick="goBack()">← Back</button>
       <div class="detail-sticky-title">${name}</div>
-      <button onclick="window.print()">🖨️</button>
+      <button onclick="printRecipe()">🖨️</button>
     </div>
 
     <div class="detail-header">
@@ -538,11 +720,14 @@ async function openRecipe(name) {
     </div>
   `;
 
+  wrapInstructionsSection();
   document.getElementById("detail-edit-btn").onclick = () => editRecipe(name);
   document.getElementById("detail-delete-btn").onclick = () => deleteRecipe(name);
 }
 
 function goBack() {
+  currentRecipe = null;
+  setActiveTab("recipes");
   renderRecipes(allRecipes);
 }
 
@@ -566,6 +751,10 @@ function setList(){
 
 async function editRecipe(name) {
   const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    showToast("Could not open editor", "error");
+    return;
+  }
   const md = await res.text();
   const recipe = allRecipes.find(r => r.name === name);
 
@@ -573,6 +762,7 @@ async function editRecipe(name) {
   document.getElementById("recipe-original-name").value = name;
   document.getElementById("recipe-name").value = name;
   document.getElementById("recipe-tags").value = (recipe?.tags || []).join(" ");
+  renderTagSuggestions();
   document.getElementById("recipe-markdown").value = md.replace(/^Tags:.*\n+/m, "");
   document.getElementById("modal").classList.remove("hidden");
 }
@@ -585,7 +775,7 @@ async function saveRecipe() {
   const photo = document.getElementById("photo-input").files[0];
 
   if (!name || !markdown) {
-    alert("Name and markdown required");
+    showToast("Name and markdown required", "error");
     return;
   }
 
@@ -601,22 +791,28 @@ async function saveRecipe() {
     body:form,
     loadingMessage: "Saving recipe..."
   });
-  if (!res.ok) { alert("Save failed"); return; }
+  if (!res.ok) { showToast("Save failed", "error"); return; }
 
   document.getElementById("recipe-original-name").value = "";
   closeModal();
   await loadRecipes();
   openRecipe(name);
+  showToast("Recipe saved", "success");
 }
 
 async function deleteRecipe(name) {
   if (!confirm("Delete recipe?")) return;
-  await api(`${API}/recipes/${encodeURIComponent(name)}`, {
+  const res = await api(`${API}/recipes/${encodeURIComponent(name)}`, {
     method:"DELETE",
     loadingMessage: "Deleting recipe..."
   });
+  if (!res.ok) {
+    showToast("Delete failed", "error");
+    return;
+  }
   goBack();
   loadRecipes();
+  showToast("Recipe deleted", "success");
 }
 
 async function deleteRecipeImage(name, filename) {
@@ -626,44 +822,303 @@ async function deleteRecipeImage(name, filename) {
     loadingMessage: "Deleting image..."
   });
   if (!res.ok) {
-    alert("Delete image failed");
+    showToast("Delete image failed", "error");
     return;
   }
   await loadRecipes();
   openRecipe(name);
+  showToast("Image deleted", "success");
 }
 
 async function deleteTag(tag) {
   if (!confirm("Delete tag everywhere?")) return;
-  await api(`${API}/tags/${encodeURIComponent(tag)}`, {
+  const res = await api(`${API}/tags/${encodeURIComponent(tag)}`, {
     method:"DELETE",
     loadingMessage: "Updating tags..."
   });
+  if (!res.ok) {
+    showToast("Tag update failed", "error");
+    return;
+  }
   await loadRecipes();
+  showToast("Tag removed", "success");
 }
 
 function openImport() {
+  setActiveTab("add");
   document.getElementById("recipe-original-name").value = "";
   document.getElementById("modal-title").textContent = "Import Recipe";
   document.getElementById("recipe-name").value="";
   document.getElementById("recipe-tags").value="";
+  renderTagSuggestions();
   document.getElementById("recipe-markdown").value="";
+  document.getElementById("source-input").value="";
   document.getElementById("photo-input").value="";
   document.getElementById("modal").classList.remove("hidden");
 }
 
 function closeModal() {
+  setActiveTab("recipes");
   document.getElementById("recipe-original-name").value = "";
   document.getElementById("modal").classList.add("hidden");
+  document.getElementById("source-input").value = "";
+  hideTagSuggestions();
+}
+
+async function importSourceFile(file) {
+  if (!file) return;
+
+  const form = new FormData();
+  form.append("source_file", file);
+
+  const res = await api(`${API}/import/convert`, {
+    method: "POST",
+    body: form,
+    loadingMessage: "Converting file..."
+  });
+
+  if (!res.ok) {
+    let message = "File conversion failed";
+    try {
+      const payload = await res.json();
+      if (payload?.detail) message = payload.detail;
+    } catch (_) {}
+    showToast(message, "error");
+    return;
+  }
+
+  const payload = await res.json();
+  const nameInput = document.getElementById("recipe-name");
+  const markdownInput = document.getElementById("recipe-markdown");
+  const existingName = nameInput.value.trim();
+
+  if (!existingName && payload.name) {
+    nameInput.value = payload.name;
+  }
+  markdownInput.value = payload.markdown || "";
+  showToast("File converted to markdown", "success");
 }
 
 function logout() {
   api(`${API}/logout`, {method:"POST"}).then(()=>location.reload());
 }
 
+function wrapInstructionsSection() {
+  const markdown = document.querySelector("#recipe-detail .markdown-content");
+  if (!markdown) return;
+  if (markdown.querySelector(".instructions-section")) return;
+
+  const children = [...markdown.children];
+  let startIndex = -1;
+
+  for (let i = 0; i < children.length; i += 1) {
+    const el = children[i];
+    if (!/^H[23]$/.test(el.tagName)) continue;
+    const title = (el.textContent || "").trim().toLowerCase();
+    if (title === "instructions" || title === "directions") {
+      startIndex = i;
+      break;
+    }
+  }
+  if (startIndex === -1) return;
+
+  const section = document.createElement("div");
+  section.className = "instructions-section";
+  const startNode = children[startIndex];
+  markdown.insertBefore(section, startNode);
+
+  let idx = startIndex;
+  while (idx < children.length) {
+    const node = children[idx];
+    if (idx > startIndex && /^H2$/.test(node.tagName)) break;
+    section.appendChild(node);
+    idx += 1;
+  }
+}
+
+function printRecipe() {
+  computePrintScale();
+  window.print();
+}
+
+function computePrintScale() {
+  const detail = document.getElementById("recipe-detail");
+  if (!detail || detail.classList.contains("hidden")) return;
+  buildStructuredPrintLayout(detail);
+}
+
+function resetPrintScale() {
+  const detail = document.getElementById("recipe-detail");
+  if (!detail) return;
+  const structured = detail.querySelector(".print-structured");
+  if (structured) structured.remove();
+  detail.classList.remove("print-layout-ready");
+}
+
+function buildStructuredPrintLayout(detail) {
+  const old = detail.querySelector(".print-structured");
+  if (old) old.remove();
+
+  const titleEl = detail.querySelector(".detail-header h1");
+  const markdown = detail.querySelector(".markdown-content");
+  if (!titleEl || !markdown) return;
+
+  const allNodes = [...markdown.children];
+  if (!allNodes.length) return;
+
+  const isStepsHeading = (text) => {
+    const t = (text || "").trim().toLowerCase().replace(/[:\s]+$/g, "");
+    return t === "steps" || t === "step" || t === "instructions" || t === "directions" || t === "method";
+  };
+
+  let splitIndex = -1;
+  for (let i = 0; i < allNodes.length; i += 1) {
+    const node = allNodes[i];
+    if (!/^H[23]$/.test(node.tagName)) continue;
+    if (isStepsHeading(node.textContent)) {
+      splitIndex = i;
+      break;
+    }
+  }
+  if (splitIndex === -1) splitIndex = allNodes.length;
+
+  const topNodes = allNodes.slice(0, splitIndex);
+  const stepsNodes = allNodes.slice(splitIndex);
+  const printRoot = document.createElement("div");
+  printRoot.className = "print-structured";
+
+  const top = document.createElement("section");
+  top.className = "print-top";
+  const heading = document.createElement("h1");
+  heading.textContent = titleEl.textContent.trim();
+  top.appendChild(heading);
+
+  const photo = detail.querySelector(".detail-image");
+  if (photo && photo.getAttribute("src")) {
+    const img = document.createElement("img");
+    img.className = "print-top-photo";
+    img.src = photo.getAttribute("src");
+    img.alt = heading.textContent;
+    top.appendChild(img);
+  }
+
+  const topContent = document.createElement("div");
+  topContent.className = "print-top-content";
+  topNodes.forEach((node) => topContent.appendChild(node.cloneNode(true)));
+  top.appendChild(topContent);
+
+  printRoot.appendChild(top);
+
+  if (stepsNodes.length) {
+    const bottom = document.createElement("section");
+    bottom.className = "print-steps";
+    const bottomTitle = document.createElement("h2");
+    bottomTitle.textContent = /^H[23]$/.test(stepsNodes[0].tagName)
+      ? (stepsNodes[0].textContent || "Steps").trim()
+      : "Steps";
+    bottom.appendChild(bottomTitle);
+
+    const grid = document.createElement("div");
+    grid.className = "print-steps-grid";
+    const left = document.createElement("div");
+    left.className = "print-steps-col";
+    const right = document.createElement("div");
+    right.className = "print-steps-col";
+
+    const flowNodes = /^H[23]$/.test(stepsNodes[0].tagName) ? stepsNodes.slice(1) : stepsNodes;
+    const getWeight = (node) => {
+      const txt = (node.textContent || "").trim().length;
+      if (node.tagName === "UL" || node.tagName === "OL") return txt + 80;
+      if (node.tagName === "P") return txt + 24;
+      if (/^H[23]$/.test(node.tagName)) return txt + 30;
+      return txt + 16;
+    };
+
+    // Build step blocks so we split at whole-step boundaries.
+    const blocks = [];
+    let currentBlock = [];
+    flowNodes.forEach((node) => {
+      const startsNewBlock = /^H[23]$/.test(node.tagName) && currentBlock.length > 0;
+      if (startsNewBlock) {
+        blocks.push(currentBlock);
+        currentBlock = [node];
+      } else {
+        currentBlock.push(node);
+      }
+    });
+    if (currentBlock.length) blocks.push(currentBlock);
+
+    const blockWeights = blocks.map((block) => block.reduce((sum, n) => sum + getWeight(n), 0));
+    const totalWeight = blockWeights.reduce((sum, w) => sum + w, 0);
+    let splitAt = blocks.length;
+
+    if (blocks.length > 1) {
+      // Find split closest to 50/50 while keeping both columns populated.
+      let running = 0;
+      let bestDiff = Number.POSITIVE_INFINITY;
+      let bestIndex = 1;
+      for (let i = 1; i < blocks.length; i += 1) {
+        running += blockWeights[i - 1];
+        const diff = Math.abs((totalWeight / 2) - running);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIndex = i;
+        }
+      }
+      splitAt = bestIndex;
+    }
+
+    blocks.forEach((block, blockIndex) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "print-step-block";
+      block.forEach((node) => wrapper.appendChild(node.cloneNode(true)));
+      if (blockIndex < splitAt) {
+        left.appendChild(wrapper);
+      } else {
+        right.appendChild(wrapper);
+      }
+    });
+
+    grid.appendChild(left);
+    grid.appendChild(right);
+    bottom.appendChild(grid);
+    printRoot.appendChild(bottom);
+  }
+
+  detail.appendChild(printRoot);
+  detail.classList.add("print-layout-ready");
+}
+
+async function disableServiceWorkers() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      await registration.unregister();
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch (err) {
+    console.error("Service worker cleanup failed:", err);
+  }
+}
+
 document.getElementById("search").addEventListener("input", e=>{
+  setActiveTab("search");
   const q = e.target.value.toLowerCase();
-  renderRecipes(allRecipes.filter(r=>r.name.toLowerCase().includes(q)));
+  renderRecipes(allRecipes.filter(r => r.name.toLowerCase().includes(q)));
+});
+
+document.getElementById("recipe-tags").addEventListener("input", renderTagSuggestions);
+document.getElementById("recipe-tags").addEventListener("focus", renderTagSuggestions);
+document.getElementById("recipe-tags").addEventListener("blur", () => {
+  setTimeout(hideTagSuggestions, 120);
+});
+document.getElementById("source-input").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  importSourceFile(file);
 });
 
 /* Close mobile sidebar if rotating to desktop */
@@ -673,8 +1128,15 @@ window.addEventListener("resize", () => {
   }
 });
 
-loadRecipes();
+window.addEventListener("beforeprint", computePrintScale);
+window.addEventListener("afterprint", resetPrintScale);
+
 setGrid();
+updateBulkToolbar();
+setupHapticFeedback();
+disableServiceWorkers();
+loadRecipes();
+setTimeout(hideSplash, 2800);
 </script>
 </body>
 </html>
