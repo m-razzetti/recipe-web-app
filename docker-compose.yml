@@ -14,7 +14,11 @@ services:
       APP_USERNAME: mrazz
       APP_PASSWORD: mikerazz
       SESSION_SECRET: dd2aa90ead80896c45904d9cd5edf32d95c230c284dc7d4719faf7b4f138a23d
-      DISABLE_AUTH: "true"
+      DISABLE_AUTH: "false"
+      OPENAI_OCR_MODEL: gpt-4.1-mini
+      OPENAI_RECIPE_MODEL: gpt-4.1-mini
+      OPENAI_TIMEOUT_SEC: "30"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
     restart: unless-stopped
 
@@ -35,3 +39,14 @@ services:
     volumes:
       - ./npm/data:/data
       - ./npm/letsencrypt:/etc/letsencrypt
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: recipes-cloudflared
+    restart: unless-stopped
+    profiles:
+      - cloudflare
+    command: tunnel --no-autoupdate run
+    environment:
+      # Create a named tunnel in Cloudflare, then paste its token into .env.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}

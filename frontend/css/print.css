@@ -3,19 +3,39 @@
 ========================= */
 
 @page {
-  size: Letter portrait;
-  margin: 0;
+  margin: 0.35in;
 }
 
 @media print {
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body > *:not(.app) {
+    display: none !important;
+  }
+
+  .app > *:not(.main) {
+    display: none !important;
+  }
+
+  .main > *:not(#recipe-detail) {
+    display: none !important;
+  }
+
   html,
   body {
-    width: 8.5in;
-    height: 11in;
+    width: auto !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
     color: #000 !important;
+    overflow: visible !important;
+    page-break-after: auto !important;
   }
 
   .app,
@@ -24,6 +44,7 @@
     height: auto !important;
     padding: 0 !important;
     overflow: visible !important;
+    min-height: 0 !important;
   }
 
   .sidebar,
@@ -42,15 +63,31 @@
     display: none !important;
   }
 
+  .ingredient-add-btn {
+    display: none !important;
+  }
+
   #recipe-detail {
     display: block !important;
     max-width: none !important;
     width: 100% !important;
     overflow: visible !important;
-    padding: 0.35in !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
     font-size: 12pt;
     line-height: 1.28;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  .markdown-content,
+  .print-top,
+  .print-top-content,
+  .print-steps,
+  .print-steps-col,
+  .print-step-block {
+    background: transparent !important;
+    border: 0 !important;
   }
 
   .detail-header {
@@ -65,14 +102,37 @@
 
   .detail-image-wrap {
     float: right !important;
-    width: 2.25in !important;
-    margin: 0 0 0.12in 0.18in !important;
+    display: none !important;
   }
 
   .detail-image {
+    display: none !important;
+  }
+
+  .mobile-recipe-hero {
+    display: block !important;
+    float: right !important;
+    width: 1.35in !important;
+    height: 1.35in !important;
+    margin: 0.02in 0 0.1in 0.14in !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+    background: transparent !important;
+    position: static !important;
+  }
+
+  .mobile-recipe-hero .detail-image {
+    display: block !important;
     width: 100% !important;
-    max-height: 2.25in !important;
+    height: 100% !important;
     object-fit: cover !important;
+    border-radius: 0 !important;
+  }
+
+  .mobile-hero-scrim,
+  .mobile-hero-top,
+  .mobile-hero-bottom {
+    display: none !important;
   }
 
   .markdown-content h2,
@@ -95,11 +155,12 @@
   .print-structured {
     display: block !important;
     width: 100%;
+    page-break-after: auto !important;
   }
 
   .print-top {
     position: relative;
-    min-height: 3.8in;
+    min-height: auto;
     margin-bottom: 0.1in;
     page-break-inside: avoid;
   }
@@ -112,11 +173,11 @@
 
   .print-top-photo {
     float: right;
-    width: 2.1in;
-    height: 2.1in;
-    margin: 0.03in 0 0.1in 0.18in;
+    width: 1.35in;
+    height: 1.35in;
+    margin: 0.02in 0 0.08in 0.14in;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: 6px;
   }
 
   .print-top-content h2,

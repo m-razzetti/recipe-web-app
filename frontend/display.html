@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Recipe Display</title>
+  <meta name="theme-color" content="#0b1020">
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(11, 16, 32, 0.75);
+      --line: rgba(255, 255, 255, 0.16);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --accent: #5eead4;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Avenir Next", "SF Pro Text", "Manrope", "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: radial-gradient(1200px 600px at 20% 0%, #1f2937 0%, #0b1020 55%);
+    }
+
+    .layer {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 1.2s ease;
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: contain;
+      filter: saturate(1.05) contrast(1.03);
+    }
+
+    .layer.active {
+      opacity: 1;
+      animation: kenburns 15s linear both;
+    }
+
+    @keyframes kenburns {
+      from { transform: scale(1.02); }
+      to { transform: scale(1.08); }
+    }
+
+    .scrim {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.1) 40%, rgba(0, 0, 0, 0.35)),
+        radial-gradient(900px 400px at 95% 5%, rgba(255, 190, 92, 0.15), transparent 50%);
+    }
+
+    .caption {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 3;
+    }
+
+    .caption-left {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 14px;
+      backdrop-filter: blur(6px);
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(20px, 2.7vw, 36px);
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+      text-wrap: balance;
+    }
+
+    .meta {
+      margin-top: 4px;
+      font-size: clamp(11px, 1.3vw, 14px);
+      color: var(--muted);
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(11, 16, 32, 0.82);
+      color: var(--accent);
+      font-size: clamp(11px, 1.1vw, 13px);
+      padding: 8px 11px;
+      white-space: nowrap;
+    }
+
+    .open-btn {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(11, 16, 32, 0.86);
+      color: #f8fafc;
+      font-size: clamp(11px, 1.1vw, 13px);
+      padding: 8px 11px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .open-btn:hover {
+      background: rgba(15, 23, 42, 0.96);
+      border-color: rgba(255, 255, 255, 0.34);
+    }
+
+    .status {
+      position: absolute;
+      top: calc(14px + env(safe-area-inset-top));
+      right: 14px;
+      z-index: 4;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(11, 16, 32, 0.75);
+      color: var(--muted);
+      font-size: 12px;
+      padding: 6px 10px;
+      backdrop-filter: blur(6px);
+    }
+
+    .auth {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(3, 7, 18, 0.75);
+      backdrop-filter: blur(4px);
+    }
+
+    .auth.visible {
+      display: flex;
+    }
+
+    .auth form {
+      width: min(420px, 100%);
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .auth h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .auth p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .auth input {
+      width: 100%;
+      margin-top: 8px;
+      background: rgba(15, 23, 42, 0.92);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    .auth button {
+      width: 100%;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-weight: 600;
+      color: #0f172a;
+      background: linear-gradient(135deg, #5eead4, #2dd4bf);
+      cursor: pointer;
+    }
+
+    .auth .error {
+      margin-top: 10px;
+      color: #fca5a5;
+      font-size: 13px;
+      min-height: 18px;
+    }
+
+    @media (max-width: 768px) {
+      .caption {
+        left: 10px;
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom));
+      }
+      .caption-left {
+        padding: 10px 11px;
+        border-radius: 12px;
+      }
+      .badge {
+        padding: 6px 8px;
+      }
+      .open-btn {
+        padding: 6px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div id="layerA" class="layer"></div>
+    <div id="layerB" class="layer"></div>
+    <div class="scrim"></div>
+
+    <div id="status" class="status">Loading...</div>
+
+    <div class="caption">
+      <div class="caption-left">
+        <h1 id="title" class="title">Recipe Display</h1>
+        <div id="meta" class="meta">Preparing slideshow...</div>
+      </div>
+      <a id="open-btn" class="open-btn" href="/" target="_blank" rel="noopener">Open Recipe</a>
+      <div id="badge" class="badge">No image</div>
+    </div>
+  </div>
+
+  <div id="auth" class="auth" aria-hidden="true">
+    <form id="auth-form">
+      <h2>Sign In</h2>
+      <p>Display mode needs your Recipe Library login.</p>
+      <input id="username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Username" required>
+      <input id="password" name="password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Password" required>
+      <button type="submit">Log In</button>
+      <div id="auth-error" class="error"></div>
+    </form>
+  </div>
+
+  <script>
+    const API = "/api";
+    const SLIDE_MS = 15000;
+    const REFRESH_MS = 10 * 60 * 1000;
+    const PAGE_SIZE = 100;
+    const DEFAULT_IMAGE = "/razz.png";
+
+    const layerA = document.getElementById("layerA");
+    const layerB = document.getElementById("layerB");
+    const statusNode = document.getElementById("status");
+    const titleNode = document.getElementById("title");
+    const metaNode = document.getElementById("meta");
+    const badgeNode = document.getElementById("badge");
+    const openBtn = document.getElementById("open-btn");
+    const authWrap = document.getElementById("auth");
+    const authForm = document.getElementById("auth-form");
+    const authError = document.getElementById("auth-error");
+
+    let slides = [];
+    let index = -1;
+    let showingA = true;
+    let slideTimer = null;
+    let refreshTimer = null;
+
+    function recipeImageSrc(recipe, filename) {
+      const params = new URLSearchParams({ recipe, filename });
+      return `/api/photo?${params.toString()}`;
+    }
+
+    function setStatus(text) {
+      statusNode.textContent = text;
+    }
+
+    function showAuth(show, message = "") {
+      authWrap.classList.toggle("visible", show);
+      authWrap.setAttribute("aria-hidden", show ? "false" : "true");
+      authError.textContent = message;
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        ...options,
+        credentials: "include",
+        cache: "no-store",
+      });
+      return res;
+    }
+
+    async function fetchAllRecipes() {
+      const all = [];
+      let offset = 0;
+      while (true) {
+        const url = `${API}/recipes?offset=${offset}&limit=${PAGE_SIZE}&_ts=${Date.now()}-${offset}`;
+        const res = await api(url);
+        if (res.status === 401) throw new Error("unauthorized");
+        if (!res.ok) throw new Error(`recipes_${res.status}`);
+        const page = await res.json();
+        all.push(...page);
+        const next = res.headers.get("X-Next-Offset");
+        if (!next) break;
+        offset = Number(next);
+        if (!Number.isFinite(offset)) break;
+      }
+      return all;
+    }
+
+    function recipeToSlide(recipe) {
+      const images = Array.isArray(recipe.images) ? recipe.images.filter(Boolean) : [];
+      const cover = recipe.cover || images[0] || "";
+      if (!cover) return null;
+      return {
+        name: recipe.name,
+        filename: cover,
+        src: recipeImageSrc(recipe.name, cover),
+      };
+    }
+
+    function shuffle(arr) {
+      const out = [...arr];
+      for (let i = out.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    }
+
+    function preload(src) {
+      const img = new Image();
+      img.src = src;
+    }
+
+    function setSlide(slide) {
+      const incoming = showingA ? layerB : layerA;
+      const outgoing = showingA ? layerA : layerB;
+      incoming.style.backgroundImage = `url("${slide.src}")`;
+      incoming.classList.add("active");
+      outgoing.classList.remove("active");
+      showingA = !showingA;
+
+      titleNode.textContent = slide.name;
+      metaNode.textContent = `Image: ${slide.filename}`;
+      badgeNode.textContent = `${index + 1} / ${slides.length}`;
+      openBtn.href = `/?recipe=${encodeURIComponent(slide.name)}`;
+      setStatus("Running");
+    }
+
+    function nextSlide() {
+      if (!slides.length) return;
+      if (slides.length === 1) {
+        index = 0;
+      } else {
+        let next = index;
+        while (next === index) {
+          next = Math.floor(Math.random() * slides.length);
+        }
+        index = next;
+      }
+      setSlide(slides[index]);
+      const next = slides[(index + 1) % slides.length];
+      if (next) preload(next.src);
+    }
+
+    function startCycle() {
+      if (slideTimer) clearInterval(slideTimer);
+      nextSlide();
+      slideTimer = setInterval(nextSlide, SLIDE_MS);
+    }
+
+    async function refreshSlides() {
+      setStatus("Syncing...");
+      const recipes = await fetchAllRecipes();
+      const nextSlides = shuffle(recipes.map(recipeToSlide).filter(Boolean));
+      slides = nextSlides;
+      index = -1;
+
+      if (!slides.length) {
+        titleNode.textContent = "No recipe images found";
+        metaNode.textContent = "Add photos or set cover images to display them here.";
+        badgeNode.textContent = "No image";
+        openBtn.href = "/";
+        layerA.classList.remove("active");
+        layerB.classList.remove("active");
+        layerA.style.backgroundImage = `url("${DEFAULT_IMAGE}")`;
+        layerB.style.backgroundImage = "";
+        layerA.classList.add("active");
+        setStatus("Waiting");
+        if (slideTimer) clearInterval(slideTimer);
+        slideTimer = null;
+        return;
+      }
+
+      startCycle();
+    }
+
+    async function tryInitialize() {
+      try {
+        showAuth(false, "");
+        await refreshSlides();
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => {
+          refreshSlides().catch(() => {});
+        }, REFRESH_MS);
+      } catch (err) {
+        if (String(err && err.message) === "unauthorized") {
+          setStatus("Sign in required");
+          showAuth(true, "");
+          return;
+        }
+        setStatus("Error");
+        metaNode.textContent = "Could not load recipes. Retrying soon...";
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => {
+          tryInitialize().catch(() => {});
+        }, 30000);
+      }
+    }
+
+    authForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      authError.textContent = "";
+      const form = new URLSearchParams();
+      form.set("username", document.getElementById("username").value);
+      form.set("password", document.getElementById("password").value);
+      const res = await fetch(`${API}/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      });
+      if (!res.ok) {
+        authError.textContent = "Invalid username or password.";
+        return;
+      }
+      showAuth(false, "");
+      tryInitialize().catch(() => {});
+    });
+
+    async function enableWakeLock() {
+      if (!("wakeLock" in navigator) || !navigator.wakeLock?.request) return;
+      try {
+        const lock = await navigator.wakeLock.request("screen");
+        lock.addEventListener("release", () => {
+          setTimeout(() => enableWakeLock().catch(() => {}), 1000);
+        });
+      } catch (_) {}
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        enableWakeLock().catch(() => {});
+      }
+    });
+
+    enableWakeLock().catch(() => {});
+    tryInitialize().catch(() => {});
+  </script>
+</body>
+</html>

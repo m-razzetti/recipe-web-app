@@ -13,13 +13,13 @@
 <link rel="apple-touch-icon" href="/razz.png">
 <link rel="apple-touch-startup-image" href="/razz.png">
 
-<link rel="stylesheet" href="/css/base.css">
-<link rel="stylesheet" href="/css/layout.css">
-<link rel="stylesheet" href="/css/components.css">
-<link rel="stylesheet" href="/css/modal.css">
-<link rel="stylesheet" href="/css/print.css">
-<link rel="stylesheet" href="/css/mobile.css">
-<link rel="stylesheet" href="/css/page.css">
+<link rel="stylesheet" href="/css/base.css?v=20260301">
+<link rel="stylesheet" href="/css/layout.css?v=20260301">
+<link rel="stylesheet" href="/css/components.css?v=20260301">
+<link rel="stylesheet" href="/css/modal.css?v=20260301">
+<link rel="stylesheet" href="/css/print.css?v=20260301">
+<link rel="stylesheet" href="/css/mobile.css?v=20260301">
+<link rel="stylesheet" href="/css/page.css?v=20260301">
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -30,6 +30,19 @@
     <img src="/razz.png" alt="" class="app-splash-logo">
     <div class="app-splash-title">Recipe Library</div>
   </div>
+</div>
+
+<div id="auth-overlay" class="auth-overlay hidden" aria-hidden="true">
+  <form id="auth-form" class="auth-card" onsubmit="submitLogin(event)">
+    <h2>Sign In</h2>
+    <p>Enter your Recipe Library credentials.</p>
+    <label for="login-username">Username</label>
+    <input id="login-username" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <button id="login-submit" type="submit">Log In</button>
+    <div id="login-error" class="login-error hidden" aria-live="polite"></div>
+  </form>
 </div>
 
 <div class="app">
@@ -49,7 +62,18 @@
     <h4>TAGS</h4>
     <div id="tag-list"></div>
 
+    <h4>SHOPPING LIST</h4>
+    <div id="shopping-status" class="shopping-status hidden" aria-live="polite"></div>
+    <div class="shopping-list-input-row">
+      <input id="shopping-item-input" placeholder="Add item">
+      <button type="button" onclick="addShoppingItem()" aria-label="Add shopping item">+</button>
+    </div>
+    <div id="shopping-list-empty" class="shopping-list-empty">No items yet</div>
+    <div id="shopping-list"></div>
+    <button class="shopping-clear-btn" type="button" onclick="clearCheckedShoppingItems()">Clear Checked</button>
+
     <button class="import-btn" onclick="openImport()">+ Import Recipe</button>
+    <button class="logout-btn" type="button" onclick="logout()">Log Out</button>
   </div>
 
   <!-- MOBILE OVERLAY (click to close) -->
@@ -61,6 +85,8 @@
       <button id="btn-select" onclick="toggleSelectionMode()">Select</button>
       <button onclick="setGrid()" id="btn-grid">Grid</button>
       <button onclick="setList()" id="btn-list">List</button>
+      <button id="btn-view-mode" type="button" onclick="toggleViewMode()">Mobile View</button>
+      <button id="btn-refresh" type="button" onclick="manualRefreshRecipes()">Refresh</button>
       <select id="sort-mode" aria-label="Sort recipes">
         <option value="alpha-asc">A to Z</option>
         <option value="alpha-desc">Z to A</option>
@@ -72,7 +98,7 @@
     <div id="bulk-toolbar" class="bulk-toolbar hidden">
       <span id="bulk-count">0 selected</span>
       <button onclick="selectAllVisible()">Select Visible</button>
-      <button onclick="bulkAddTags()">Add Tags</button>
+      <button onclick="openBulkTagModal()">Add Tags</button>
       <button class="danger" onclick="bulkDeleteRecipes()">Delete</button>
       <button onclick="clearSelection()">Clear</button>
     </div>
@@ -109,14 +135,36 @@
     <input id="recipe-tags" placeholder="tags separated by space">
     <div id="tag-suggestions" class="tag-suggestions hidden"></div>
     <textarea id="recipe-markdown" rows="15"></textarea>
-    <label for="source-input" style="font-size:12px; color:#475569;">Recipe source (.txt/.md/.pdf, auto-convert to markdown)</label>
-    <input type="file" id="source-input" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf">
-    <label for="photo-input" style="font-size:12px; color:#475569;">Photo (optional)</label>
-    <input type="file" id="photo-input" accept="image/*">
+    <label for="source-url" style="font-size:12px; color:#475569;">Social recipe URL (Instagram/TikTok)</label>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input id="source-url" type="url" placeholder="https://..." style="flex:1;">
+      <button type="button" onclick="importFromUrl()">Import URL</button>
+    </div>
+    <label for="source-input" style="font-size:12px; color:#475569;">Recipe source (.txt/.md/.pdf/image, auto-convert to markdown with OCR)</label>
+    <input type="file" id="source-input" accept=".txt,.md,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,text/plain,text/markdown,application/pdf,image/*">
+    <label for="photo-input" style="font-size:12px; color:#475569;">Photos (optional)</label>
+    <input type="file" id="photo-input" accept="image/*" multiple>
+    <div id="modal-image-manager" class="modal-image-manager hidden">
+      <label for="title-image-select" style="font-size:12px; color:#475569;">Title image</label>
+      <select id="title-image-select" onchange="setModalCoverFromSelect()"></select>
+      <div id="modal-image-list" class="modal-image-list"></div>
+    </div>
 
     <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:10px;">
       <button onclick="closeModal()">Cancel</button>
       <button onclick="saveRecipe()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="bulk-tag-modal" class="hidden">
+  <div class="modal-content">
+    <h3>Add Tags To Selected Recipes</h3>
+    <input id="bulk-tags-input" placeholder="tags separated by space">
+    <div id="bulk-tag-suggestions" class="tag-suggestions hidden"></div>
+    <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:10px;">
+      <button onclick="closeBulkTagModal()">Cancel</button>
+      <button onclick="submitBulkAddTags()">Add Tags</button>
     </div>
   </div>
 </div>
@@ -154,16 +202,170 @@ let splashDismissed = false;
 let ingredientScaleNodes = [];
 let recipeScaleFactor = 1;
 let sortMode = "alpha-asc";
+let modalImages = [];
+let modalCover = "";
+let shoppingItems = [];
+let shoppingPendingItemIds = new Set();
+let shoppingAddPending = false;
+let shoppingClearPending = false;
+let shoppingCreatePendingCount = 0;
+let syncInFlight = false;
+let lastAutoSyncAt = 0;
+let authRequired = false;
+let forceMobileView = false;
+let importedSourceImageUrl = "";
+let panLockStartX = 0;
+let panLockStartY = 0;
+let initialRecipeFromQuery = "";
+
+function isMobileView() {
+  return forceMobileView || window.matchMedia("(max-width: 768px)").matches;
+}
+
+function applyViewMode() {
+  document.body.classList.toggle("force-mobile", forceMobileView);
+  const viewBtn = document.getElementById("btn-view-mode");
+  if (viewBtn) {
+    viewBtn.textContent = forceMobileView ? "Desktop View" : "Mobile View";
+    viewBtn.setAttribute("aria-pressed", forceMobileView ? "true" : "false");
+  }
+}
+
+function loadViewModePreference() {
+  try {
+    forceMobileView = localStorage.getItem("recipes:view-mode") === "mobile";
+  } catch (_) {
+    forceMobileView = false;
+  }
+  applyViewMode();
+}
+
+function toggleViewMode() {
+  forceMobileView = !forceMobileView;
+  try {
+    localStorage.setItem("recipes:view-mode", forceMobileView ? "mobile" : "auto");
+  } catch (_) {}
+  applyViewMode();
+
+  closeMobileSidebar();
+  closeMobileRecipeMenu();
+  if (document.getElementById("recipe-detail").classList.contains("hidden")) {
+    renderFromSearch();
+    return;
+  }
+  if (currentRecipe) {
+    openRecipe(currentRecipe);
+  }
+}
 
 async function api(url, options={}) {
-  const { skipLoading, loadingMessage, ...fetchOptions } = options;
+  const { skipLoading, loadingMessage, forceNetwork, ...fetchOptions } = options;
   fetchOptions.credentials = "include";
+  if (forceNetwork) {
+    fetchOptions.cache = "no-store";
+    const headers = new Headers(fetchOptions.headers || {});
+    headers.set("Cache-Control", "no-cache");
+    headers.set("Pragma", "no-cache");
+    fetchOptions.headers = headers;
+  }
 
   if (!skipLoading) beginLoading(loadingMessage || "Loading...");
   try {
-    return await fetch(url, fetchOptions);
+    const res = await fetch(url, fetchOptions);
+    const isAuthRoute = url.includes("/api/login") || url.includes("/api/auth-check");
+    if (res.status === 401 && !isAuthRoute) {
+      showLoginOverlay();
+    }
+    return res;
   } finally {
     if (!skipLoading) endLoading();
+  }
+}
+
+function showLoginOverlay(message = "") {
+  authRequired = true;
+  const overlay = document.getElementById("auth-overlay");
+  const error = document.getElementById("login-error");
+  const user = document.getElementById("login-username");
+  const pass = document.getElementById("login-password");
+  if (error) {
+    if (message) {
+      error.textContent = message;
+      error.classList.remove("hidden");
+    } else {
+      error.textContent = "";
+      error.classList.add("hidden");
+    }
+  }
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  if (user) user.value = "";
+  if (pass) pass.value = "";
+  setTimeout(() => user?.focus(), 0);
+}
+
+function hideLoginOverlay() {
+  authRequired = false;
+  const overlay = document.getElementById("auth-overlay");
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch(`${API}/auth-check`, { credentials: "include", cache: "no-store" });
+    if (!res.ok) return false;
+    const payload = await res.json();
+    return Boolean(payload?.authenticated);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  const submit = document.getElementById("login-submit");
+  const error = document.getElementById("login-error");
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (error) {
+    error.textContent = "";
+    error.classList.add("hidden");
+  }
+  submit.disabled = true;
+  try {
+    const body = new URLSearchParams();
+    body.set("username", username);
+    body.set("password", password);
+    const res = await fetch(`${API}/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      cache: "no-store"
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        showLoginOverlay("Invalid username or password.");
+      } else if (res.status >= 500) {
+        showLoginOverlay("Server unavailable. Please try again in a moment.");
+      } else {
+        showLoginOverlay("Login failed. Please try again.");
+      }
+      return;
+    }
+    hideLoginOverlay();
+    beginLoading("Loading recipes...");
+    try {
+      await loadRecipes({ forceNetwork: true });
+      await loadShoppingList();
+    } finally {
+      endLoading();
+    }
+  } catch (_) {
+    showLoginOverlay("Login failed. Please try again.");
+  } finally {
+    submit.disabled = false;
   }
 }
 
@@ -211,8 +413,115 @@ function endLoading() {
 
 function recipeImageSrc(name, cover, thumb = false) {
   if (!cover) return DEFAULT_RECIPE_IMAGE;
-  const query = thumb ? "?thumb=1" : "";
-  return `/api/photos/${encodeURIComponent(name)}/${cover}${query}`;
+  const params = new URLSearchParams({
+    recipe: name,
+    filename: cover,
+  });
+  if (thumb) params.set("thumb", "1");
+  return `/api/photo?${params.toString()}`;
+}
+
+function getRecipeImages(recipe) {
+  const images = Array.isArray(recipe?.images)
+    ? recipe.images.filter(Boolean)
+    : [];
+  if (images.length) return [...new Set(images)];
+  if (recipe?.cover) return [recipe.cover];
+  return [];
+}
+
+function normalizeRecipeSummary(recipe) {
+  const normalized = { ...(recipe || {}) };
+  const images = getRecipeImages(normalized);
+  normalized.images = images;
+  if (!normalized.cover && images.length) normalized.cover = images[0];
+  return normalized;
+}
+
+function setModalCoverFromSelect() {
+  const select = document.getElementById("title-image-select");
+  modalCover = (select?.value || "").trim();
+}
+
+function resetModalImageState() {
+  modalImages = [];
+  modalCover = "";
+  renderModalImageManager();
+}
+
+function openModalImageManager(images, cover) {
+  modalImages = [...new Set((images || []).filter(Boolean))];
+  if (cover && modalImages.includes(cover)) modalCover = cover;
+  else modalCover = modalImages[0] || "";
+  renderModalImageManager();
+}
+
+function renderModalImageManager() {
+  const manager = document.getElementById("modal-image-manager");
+  const list = document.getElementById("modal-image-list");
+  const select = document.getElementById("title-image-select");
+  if (!manager || !list || !select) return;
+
+  if (!modalImages.length) {
+    manager.classList.add("hidden");
+    list.innerHTML = "";
+    select.innerHTML = "";
+    return;
+  }
+
+  manager.classList.remove("hidden");
+  const imageItems = modalImages.map((value) => {
+    const pending = value.startsWith("__pending__:");
+    const filename = pending ? value.slice("__pending__:".length) : value;
+    return { key: value, filename, pending };
+  });
+
+  select.innerHTML = imageItems
+    .map(({ filename, pending }) => `<option value=${JSON.stringify(filename)}>${pending ? `${filename} (new)` : filename}</option>`)
+    .join("");
+  const availableNames = imageItems.map((item) => item.filename);
+  if (modalCover && availableNames.includes(modalCover)) {
+    select.value = modalCover;
+  } else {
+    modalCover = availableNames[0];
+    select.value = modalCover;
+  }
+
+  const recipeName = document.getElementById("recipe-original-name").value.trim() || document.getElementById("recipe-name").value.trim();
+  list.innerHTML = imageItems.map(({ filename, pending }) => `
+    <div class="modal-image-item">
+      ${pending || !recipeName
+        ? `<div class="modal-image-placeholder">NEW</div>`
+        : `<img src="${recipeImageSrc(recipeName, filename, true)}" alt="${filename}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}'>`
+      }
+      <div class="modal-image-meta">
+        <span class="modal-image-name">${filename}</span>
+        ${modalCover === filename ? `<span class="modal-image-badge">Title</span>` : ""}
+      </div>
+      ${pending ? `<span class="modal-image-pending">Uploads on save</span>` : `<button type="button" class="danger" onclick='removeModalExistingImage(${JSON.stringify(filename)})'>Delete</button>`}
+    </div>
+  `).join("");
+}
+
+function syncModalPendingUploads() {
+  const input = document.getElementById("photo-input");
+  if (!input) return;
+  const pendingNames = Array.from(input.files || [])
+    .map((file) => (file?.name || "").trim())
+    .filter(Boolean);
+  const existingOnly = modalImages.filter((filename) => !filename.startsWith("__pending__:"));
+  const pending = pendingNames.map((filename) => `__pending__:${filename}`);
+  const merged = [...existingOnly, ...pending];
+  modalImages = [...new Set(merged)];
+  if (modalCover) {
+    const availableNames = modalImages.map((value) => (
+      value.startsWith("__pending__:") ? value.slice("__pending__:".length) : value
+    ));
+    if (!availableNames.includes(modalCover)) {
+      modalCover = availableNames[0] || "";
+    }
+  }
+  renderModalImageManager();
 }
 
 function clearSearch() {
@@ -221,6 +530,246 @@ function clearSearch() {
   if (desktopSearch) desktopSearch.value = "";
   if (mobileSearch) mobileSearch.value = "";
   renderFromSearch();
+}
+
+function refreshShoppingStatus() {
+  const status = document.getElementById("shopping-status");
+  if (!status) return;
+
+  let text = "";
+  if (shoppingAddPending || shoppingCreatePendingCount > 0) text = "Adding item...";
+  else if (shoppingClearPending) text = "Clearing checked items...";
+  else if (shoppingPendingItemIds.size > 0) text = "Updating item...";
+
+  if (!text) {
+    status.classList.add("hidden");
+    status.textContent = "";
+    return;
+  }
+
+  status.textContent = text;
+  status.classList.remove("hidden");
+}
+
+function setShoppingAddPending(isPending) {
+  shoppingAddPending = Boolean(isPending);
+  const row = document.querySelector(".shopping-list-input-row");
+  const input = document.getElementById("shopping-item-input");
+  const button = row ? row.querySelector("button") : null;
+
+  if (row) row.classList.toggle("is-pending", shoppingAddPending);
+  if (input) input.disabled = shoppingAddPending;
+  if (button) {
+    button.disabled = shoppingAddPending;
+    button.textContent = shoppingAddPending ? "…" : "+";
+    button.setAttribute("aria-busy", shoppingAddPending ? "true" : "false");
+  }
+  refreshShoppingStatus();
+}
+
+function setShoppingClearPending(isPending) {
+  shoppingClearPending = Boolean(isPending);
+  const button = document.querySelector(".shopping-clear-btn");
+  if (!button) return;
+  button.disabled = shoppingClearPending;
+  button.classList.toggle("is-pending", shoppingClearPending);
+  button.textContent = shoppingClearPending ? "Clearing..." : "Clear Checked";
+  refreshShoppingStatus();
+}
+
+function setShoppingItemPending(itemId, isPending) {
+  if (!itemId) return;
+  if (isPending) shoppingPendingItemIds.add(itemId);
+  else shoppingPendingItemIds.delete(itemId);
+  refreshShoppingStatus();
+  renderShoppingList();
+}
+
+function renderShoppingList() {
+  const root = document.getElementById("shopping-list");
+  const empty = document.getElementById("shopping-list-empty");
+  if (!root || !empty) return;
+  root.innerHTML = "";
+
+  if (!shoppingItems.length) {
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  const orderedItems = [...shoppingItems].sort((a, b) => Number(Boolean(a.checked)) - Number(Boolean(b.checked)));
+  orderedItems.forEach((item) => {
+    const isPending = shoppingPendingItemIds.has(item.id);
+    const row = document.createElement("div");
+    row.className = `shopping-item ${item.checked ? "is-checked" : ""} ${isPending ? "is-pending" : ""}`;
+    if (isPending) row.setAttribute("aria-busy", "true");
+
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = Boolean(item.checked);
+    check.disabled = isPending;
+    check.onchange = () => toggleShoppingItem(item.id);
+
+    const text = document.createElement("button");
+    text.type = "button";
+    text.className = "shopping-item-text";
+    text.textContent = item.text;
+    text.disabled = isPending;
+    text.onclick = () => toggleShoppingItem(item.id);
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "shopping-item-edit";
+    editBtn.textContent = "✏️";
+    editBtn.title = "Edit item";
+    editBtn.disabled = isPending;
+    editBtn.onclick = () => editShoppingItem(item.id, item.text);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "shopping-item-delete";
+    delBtn.textContent = "🗑";
+    delBtn.title = "Delete item";
+    delBtn.disabled = isPending;
+    delBtn.onclick = () => deleteShoppingItem(item.id);
+
+    row.appendChild(check);
+    row.appendChild(text);
+    row.appendChild(editBtn);
+    row.appendChild(delBtn);
+    root.appendChild(row);
+  });
+}
+
+async function loadShoppingList(skipLoading = true) {
+  const res = await api(`${API}/shopping-list`, { skipLoading });
+  if (!res.ok) {
+    showToast("Could not load shopping list", "error");
+    return;
+  }
+  const payload = await res.json();
+  shoppingItems = Array.isArray(payload?.items) ? payload.items : [];
+  renderShoppingList();
+}
+
+async function createShoppingListItem(text, { showSuccess = false } = {}) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) return false;
+  shoppingCreatePendingCount += 1;
+  refreshShoppingStatus();
+  try {
+    const res = await api(`${API}/shopping-list/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: cleanText }),
+      skipLoading: true,
+    });
+    if (!res.ok) {
+      showToast("Could not add item", "error");
+      return false;
+    }
+    await loadShoppingList(true);
+    if (showSuccess) showToast("Added to shopping list", "success");
+    return true;
+  } finally {
+    shoppingCreatePendingCount = Math.max(0, shoppingCreatePendingCount - 1);
+    refreshShoppingStatus();
+  }
+}
+
+async function addShoppingItem() {
+  if (shoppingAddPending) return;
+  const input = document.getElementById("shopping-item-input");
+  const text = (input?.value || "").trim();
+  if (!text) return;
+
+  setShoppingAddPending(true);
+  try {
+    const ok = await createShoppingListItem(text);
+    if (!ok) return;
+    if (input) input.value = "";
+  } finally {
+    setShoppingAddPending(false);
+  }
+}
+
+async function toggleShoppingItem(itemId) {
+  if (!itemId || shoppingPendingItemIds.has(itemId)) return;
+  setShoppingItemPending(itemId, true);
+  try {
+    const res = await api(`${API}/shopping-list/items/${encodeURIComponent(itemId)}/toggle`, {
+      method: "POST",
+      skipLoading: true,
+    });
+    if (!res.ok) {
+      showToast("Could not update item", "error");
+      return;
+    }
+    await loadShoppingList(true);
+  } finally {
+    setShoppingItemPending(itemId, false);
+  }
+}
+
+async function editShoppingItem(itemId, currentText) {
+  if (!itemId || shoppingPendingItemIds.has(itemId)) return;
+  const next = prompt("Edit shopping item:", currentText || "");
+  const text = (next || "").trim();
+  if (!text) return;
+  setShoppingItemPending(itemId, true);
+  try {
+    const res = await api(`${API}/shopping-list/items/${encodeURIComponent(itemId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      skipLoading: true,
+    });
+    if (!res.ok) {
+      showToast("Could not edit item", "error");
+      return;
+    }
+    await loadShoppingList(true);
+  } finally {
+    setShoppingItemPending(itemId, false);
+  }
+}
+
+async function deleteShoppingItem(itemId) {
+  if (!itemId || shoppingPendingItemIds.has(itemId)) return;
+  setShoppingItemPending(itemId, true);
+  try {
+    const res = await api(`${API}/shopping-list/items/${encodeURIComponent(itemId)}`, {
+      method: "DELETE",
+      skipLoading: true,
+    });
+    if (!res.ok) {
+      showToast("Could not delete item", "error");
+      return;
+    }
+    await loadShoppingList(true);
+  } finally {
+    setShoppingItemPending(itemId, false);
+  }
+}
+
+async function clearCheckedShoppingItems() {
+  if (shoppingClearPending) return;
+  const hasChecked = shoppingItems.some((item) => item.checked);
+  if (!hasChecked) return;
+  setShoppingClearPending(true);
+  try {
+    const res = await api(`${API}/shopping-list/clear-checked`, {
+      method: "POST",
+      skipLoading: true,
+    });
+    if (!res.ok) {
+      showToast("Could not clear checked items", "error");
+      return;
+    }
+    await loadShoppingList(true);
+  } finally {
+    setShoppingClearPending(false);
+  }
 }
 
 function updateBulkToolbar() {
@@ -259,12 +808,81 @@ function selectAllVisible() {
   renderFromSearch();
 }
 
-async function bulkAddTags() {
+function openBulkTagModal() {
   if (!selectedRecipes.size) {
     showToast("Select at least one recipe", "error");
     return;
   }
-  const tags = prompt("Add tags (space or comma separated):");
+  const modal = document.getElementById("bulk-tag-modal");
+  const input = document.getElementById("bulk-tags-input");
+  if (!modal || !input) return;
+  input.value = "";
+  modal.classList.remove("hidden");
+  renderBulkTagSuggestions();
+  input.focus();
+}
+
+function closeBulkTagModal() {
+  const modal = document.getElementById("bulk-tag-modal");
+  const input = document.getElementById("bulk-tags-input");
+  const box = document.getElementById("bulk-tag-suggestions");
+  if (input) input.value = "";
+  if (box) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+  }
+  if (modal) modal.classList.add("hidden");
+}
+
+function applyBulkTagSuggestion(tag) {
+  const input = document.getElementById("bulk-tags-input");
+  if (!input) return;
+  const raw = input.value;
+  const nextTag = `${tag} `;
+  if (/[\s,]$/.test(raw) || raw.length === 0) {
+    input.value = `${raw}${nextTag}`;
+  } else {
+    input.value = raw.replace(/[^\s,]*$/, nextTag);
+  }
+  input.focus();
+  renderBulkTagSuggestions();
+}
+
+function renderBulkTagSuggestions() {
+  const box = document.getElementById("bulk-tag-suggestions");
+  const input = document.getElementById("bulk-tags-input");
+  if (!box || !input) return;
+  const raw = input.value.trimEnd();
+  const { currentToken, existingTokens } = getTagInputState(raw);
+  const existing = new Set(existingTokens);
+
+  const candidates = [...tagPopularity.entries()]
+    .filter(([tag]) => !existing.has(tag))
+    .filter(([tag]) => !currentToken || tag.startsWith(currentToken))
+    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+    .slice(0, 7);
+
+  if (!candidates.length) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+    return;
+  }
+
+  box.innerHTML = "";
+  candidates.forEach(([tag, count]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tag-suggestion-item";
+    btn.innerHTML = `<span>${tag}</span><span class="tag-suggestion-count">${count}</span>`;
+    btn.onclick = () => applyBulkTagSuggestion(tag);
+    box.appendChild(btn);
+  });
+  box.classList.remove("hidden");
+}
+
+async function submitBulkAddTags() {
+  const input = document.getElementById("bulk-tags-input");
+  const tags = input ? input.value : "";
   if (!tags || !tags.trim()) return;
 
   const res = await api(`${API}/recipes/bulk-tags`, {
@@ -277,6 +895,7 @@ async function bulkAddTags() {
     showToast("Bulk tag update failed", "error");
     return;
   }
+  closeBulkTagModal();
   await loadRecipes();
   toggleSelectionMode(false);
   showToast("Tags updated", "success");
@@ -411,6 +1030,26 @@ function setupHapticFeedback() {
   });
 }
 
+function setupMobilePanLock() {
+  document.addEventListener("touchstart", (event) => {
+    if (!event.touches || event.touches.length !== 1) return;
+    panLockStartX = event.touches[0].clientX;
+    panLockStartY = event.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (event) => {
+    if (!event.touches || event.touches.length !== 1) return;
+    if (!isMobileView()) return;
+    const x = event.touches[0].clientX;
+    const y = event.touches[0].clientY;
+    const dx = Math.abs(x - panLockStartX);
+    const dy = Math.abs(y - panLockStartY);
+    if (dx > dy + 2) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+}
+
 function setActiveTab(tab) {
   ["recipes", "search", "tags", "add"].forEach(name => {
     const el = document.getElementById(`tab-${name}`);
@@ -432,7 +1071,7 @@ function activateMobileTab(tab) {
   if (tab === "search") {
     goBack();
     setActiveTab("search");
-    const search = window.matchMedia("(max-width: 768px)").matches
+    const search = isMobileView()
       ? document.getElementById("search-mobile")
       : document.getElementById("search");
     search.focus();
@@ -460,14 +1099,15 @@ function closeMobileSidebar() {
 
 /* Close sidebar after selecting a tag on mobile */
 function closeSidebarIfMobile() {
-  if (window.matchMedia("(max-width: 768px)").matches) {
+  if (isMobileView()) {
     closeMobileSidebar();
   }
 }
 
-async function loadRecipes() {
+async function loadRecipes(options = {}) {
+  const { forceNetwork = false } = options;
   showRecipeSkeleton();
-  const firstPage = await fetchRecipePage(0, true);
+  const firstPage = await fetchRecipePage(0, true, forceNetwork);
   if (!firstPage) {
     showToast("Could not load recipes", "error");
     hideSplash();
@@ -480,21 +1120,64 @@ async function loadRecipes() {
   renderTags();
 
   if (firstPage.nextOffset !== null) {
-    loadRemainingRecipePages(firstPage.nextOffset);
+    loadRemainingRecipePages(firstPage.nextOffset, forceNetwork);
   }
   hideSplash();
 }
 
-async function fetchRecipePage(offset, skipLoading = true) {
-  const res = await api(`${API}/recipes?offset=${offset}&limit=${RECIPE_PAGE_SIZE}`, { skipLoading });
+async function fetchRecipePage(offset, skipLoading = true, forceNetwork = false) {
+  const baseUrl = new URL(`${API}/recipes`, window.location.origin);
+  baseUrl.searchParams.set("offset", String(offset));
+  baseUrl.searchParams.set("limit", String(RECIPE_PAGE_SIZE));
+  if (forceNetwork) {
+    baseUrl.searchParams.set("_ts", `${Date.now()}-${offset}`);
+  }
+  const res = await api(`${baseUrl.pathname}${baseUrl.search}`, { skipLoading, forceNetwork });
   if (!res.ok) return null;
 
-  const items = await res.json();
+  const items = (await res.json()).map(normalizeRecipeSummary);
   const nextOffsetHeader = res.headers.get("X-Next-Offset");
   const nextOffset = nextOffsetHeader === null || nextOffsetHeader === ""
     ? null
     : Number(nextOffsetHeader);
   return { items, nextOffset };
+}
+
+async function refreshRecipesCache(forceNetwork = false) {
+  const firstPage = await fetchRecipePage(0, true, forceNetwork);
+  if (!firstPage) return false;
+
+  allRecipes = firstPage.items;
+  let nextOffset = firstPage.nextOffset;
+  while (nextOffset !== null) {
+    const page = await fetchRecipePage(nextOffset, true, forceNetwork);
+    if (!page) break;
+    mergeRecipes(page.items);
+    nextOffset = page.nextOffset;
+  }
+
+  rebuildTagPopularity();
+  renderTags();
+  return true;
+}
+
+async function manualRefreshRecipes() {
+  if (authRequired) return;
+  if (syncInFlight) return;
+  syncInFlight = true;
+  beginLoading("Refreshing recipes...");
+  try {
+    const ok = await refreshRecipesCache(true);
+    if (!ok) {
+      showToast("Could not refresh recipes", "error");
+      return;
+    }
+    renderFromSearch();
+    showToast("Recipes synced", "success");
+  } finally {
+    syncInFlight = false;
+    endLoading();
+  }
 }
 
 function showRecipeSkeleton(count = 8) {
@@ -596,10 +1279,10 @@ function renderTagSuggestions() {
   box.classList.remove("hidden");
 }
 
-async function loadRemainingRecipePages(startOffset) {
+async function loadRemainingRecipePages(startOffset, forceNetwork = false) {
   let nextOffset = startOffset;
   while (nextOffset !== null) {
-    const page = await fetchRecipePage(nextOffset, true);
+    const page = await fetchRecipePage(nextOffset, true, forceNetwork);
     if (!page) return;
     mergeRecipes(page.items);
     renderTags();
@@ -613,7 +1296,7 @@ async function loadRemainingRecipePages(startOffset) {
 function renderFromSearch() {
   const mobileSearch = document.getElementById("search-mobile");
   const desktopSearch = document.getElementById("search");
-  const q = window.matchMedia("(max-width: 768px)").matches
+  const q = isMobileView()
     ? (mobileSearch?.value || "").toLowerCase()
     : (desktopSearch?.value || "").toLowerCase();
   renderRecipes(allRecipes.filter(r => r.name.toLowerCase().includes(q)));
@@ -772,88 +1455,77 @@ async function openRecipe(name) {
   currentRecipe = name;
   setActiveTab("recipes");
   closeSidebarIfMobile();
+  beginLoading("Opening recipe...");
 
-  const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
-  if (!res.ok) {
-    showToast("Could not open recipe", "error");
-    return;
-  }
+  try {
+    const res = await api(`${API}/recipe?name=${encodeURIComponent(name)}`, { skipLoading: true });
+    if (!res.ok) {
+      showToast("Could not open recipe", "error");
+      return;
+    }
 
-  let md = await res.text();
+    let md = await res.text();
 
-  // Remove Tags line
-  md = md.replace(/^Tags:.*\n+/m, "");
+    // Remove Tags line
+    md = md.replace(/^Tags:.*\n+/m, "");
 
-  // Remove first markdown heading so title isn't duplicated
-  md = md.replace(/^#+\s+.*\n?/, "");
+    // Remove first markdown heading so title isn't duplicated
+    md = md.replace(/^#+\s+.*\n?/, "");
 
-  const recipe = allRecipes.find(r => r.name === name);
-  const isMobileView = window.matchMedia("(max-width: 768px)").matches;
-  const html = marked.parse(md);
+    const recipe = allRecipes.find(r => r.name === name);
+    let recipeImages = getRecipeImages(recipe);
+    let coverImage = recipe?.cover && recipeImages.includes(recipe.cover) ? recipe.cover : (recipeImages[0] || null);
+    const photosRes = await api(`${API}/recipe/photos?name=${encodeURIComponent(name)}`, { skipLoading: true });
+    if (photosRes.ok) {
+      const payload = await photosRes.json();
+      const fetchedImages = Array.isArray(payload?.images) ? payload.images.filter(Boolean) : [];
+      if (fetchedImages.length) {
+        recipeImages = [...new Set(fetchedImages)];
+        coverImage = payload?.cover && recipeImages.includes(payload.cover) ? payload.cover : recipeImages[0];
+      }
+    }
+    const mobileView = isMobileView();
+    const html = marked.parse(md);
 
-  document.getElementById("grid-controls").style.display = "none";
-  document.getElementById("recipe-grid").classList.add("hidden");
-  document.getElementById("recipe-detail").classList.remove("hidden");
-  document.body.classList.add("mobile-recipe-open");
+    document.getElementById("grid-controls").style.display = "none";
+    document.getElementById("recipe-grid").classList.add("hidden");
+    document.getElementById("recipe-detail").classList.remove("hidden");
+    document.body.classList.add("mobile-recipe-open");
 
-  const stickyScale = isMobileView ? `
-      <select id="recipe-scale-select-mobile" class="mobile-scale-inline" aria-label="Scale recipe" onchange="applyRecipeScale(Number(this.value))">
-        <option value="0.25">0.25x</option>
-        <option value="0.5">0.5x</option>
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-        <option value="1.75">1.75x</option>
-        <option value="2">2x</option>
-        <option value="2.5">2.5x</option>
-        <option value="3">3x</option>
-        <option value="4">4x</option>
-      </select>
-  ` : "";
-  const stickyActions = isMobileView
-    ? `
-      <div class="detail-sticky-menu">
-        <button type="button" class="sticky-menu-btn" aria-label="Recipe actions" onclick="toggleMobileRecipeMenu(event)">⋯</button>
-        <div id="mobile-recipe-menu" class="mobile-recipe-menu hidden" onclick="event.stopPropagation()">
-          <button type="button" onclick="closeMobileRecipeMenu(); printRecipe();">Print</button>
-          <button type="button" onclick='closeMobileRecipeMenu(); editRecipe(${JSON.stringify(name)});'>Edit</button>
-          <button type="button" class="danger" onclick='closeMobileRecipeMenu(); deleteRecipe(${JSON.stringify(name)});'>Delete</button>
-        </div>
+    const scaleSelect = `
+    <select id="${mobileView ? "recipe-scale-select-mobile" : "recipe-scale-select"}" class="${mobileView ? "mobile-scale-inline" : ""}" aria-label="Scale recipe" onchange="applyRecipeScale(Number(this.value))">
+      <option value="0.25">0.25x</option>
+      <option value="0.5">0.5x</option>
+      <option value="0.75">0.75x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.25">1.25x</option>
+      <option value="1.5">1.5x</option>
+      <option value="1.75">1.75x</option>
+      <option value="2">2x</option>
+      <option value="2.5">2.5x</option>
+      <option value="3">3x</option>
+      <option value="4">4x</option>
+    </select>
+  `;
+
+    const actionsMenu = `
+    <div class="detail-sticky-menu">
+      <button type="button" class="sticky-menu-btn" aria-label="Recipe actions" onclick="toggleMobileRecipeMenu(event)">⋯</button>
+      <div id="mobile-recipe-menu" class="mobile-recipe-menu hidden" onclick="event.stopPropagation()">
+        <button type="button" onclick="closeMobileRecipeMenu(); window.print();">Print</button>
+        <button type="button" onclick='closeMobileRecipeMenu(); editRecipe(${JSON.stringify(name)});'>Edit</button>
+        <button type="button" class="danger" onclick='closeMobileRecipeMenu(); deleteRecipe(${JSON.stringify(name)});'>Delete</button>
       </div>
-    `
-    : `<button onclick="printRecipe()">🖨️</button>`;
-  const mobileScaleBar = isMobileView ? `
-    <div class="mobile-scale-row">
-      <span>Scale</span>
-      ${stickyScale}
-      <span id="recipe-scale-label-mobile" class="mobile-scale-label">1x</span>
     </div>
-  ` : "";
+  `;
 
-  const detailHeader = isMobileView ? `
-    <div class="detail-header hidden">
-      <h1>${name}</h1>
-    </div>
-  ` : `
+    const detailHeader = `
     <div class="detail-header">
       <h1>${name}</h1>
       <div class="detail-scale-control">
         <label for="recipe-scale-input">Scale</label>
         <input id="recipe-scale-input" type="number" min="0.25" max="10" step="0.25" value="1">
-        <select id="recipe-scale-select" aria-label="Scale recipe" onchange="applyRecipeScale(Number(this.value))">
-          <option value="0.25">0.25x</option>
-          <option value="0.5">0.5x</option>
-          <option value="0.75">0.75x</option>
-          <option value="1" selected>1x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="1.75">1.75x</option>
-          <option value="2">2x</option>
-          <option value="2.5">2.5x</option>
-          <option value="3">3x</option>
-          <option value="4">4x</option>
-        </select>
+        ${scaleSelect}
         <span id="recipe-scale-label">1x</span>
       </div>
       <div class="detail-icons">
@@ -863,60 +1535,94 @@ async function openRecipe(name) {
     </div>
   `;
 
-  document.getElementById("recipe-detail").innerHTML = `
-    <div class="detail-sticky">
-      <button class="back-btn" onclick="goBack()">← Back</button>
-      <div class="detail-sticky-title">${name}</div>
-      ${stickyActions}
-    </div>
-
-    ${detailHeader}
-    ${mobileScaleBar}
-
-    <div class="detail-body">
-      <div class="detail-image-wrap">
-        <img class="detail-image ${recipe?.cover ? "" : "is-fallback"}" src="${recipeImageSrc(name, recipe?.cover)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
-        ${recipe?.cover ? `<button class="detail-image-delete" title="Delete image" onclick='deleteRecipeImage(${JSON.stringify(name)}, ${JSON.stringify(recipe.cover)})'>🗑️</button>` : ""}
+    const otherImages = recipeImages.filter((filename) => filename !== coverImage);
+    const imageStrip = otherImages.length
+    ? `
+      <div class="detail-image-strip detail-image-strip-bottom">
+        ${otherImages.map((filename) => `
+          <button type="button" data-filename="${filename}" class="detail-thumb" onclick='openRecipeThumbLightbox(${JSON.stringify(name)}, ${JSON.stringify(filename)})'>
+            <img src="${recipeImageSrc(name, filename, true)}" alt="${filename}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}'">
+          </button>
+        `).join("")}
       </div>
+    `
+    : "";
+
+    const mobileLayout = `
+    <div class="mobile-recipe-hero">
+      <img id="detail-main-image" data-recipe="${name}" data-filename="${coverImage || ""}" class="detail-image ${coverImage ? "" : "is-fallback"}" src="${recipeImageSrc(name, coverImage)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
+      <div class="mobile-hero-scrim"></div>
+      <div class="mobile-hero-top">
+        <button type="button" class="mobile-hero-back" aria-label="Back" onclick="goBack()">←</button>
+        ${actionsMenu}
+      </div>
+      <div class="mobile-hero-bottom">
+        <h1>${name}</h1>
+      </div>
+    </div>
+    <div class="detail-header hidden"><h1>${name}</h1></div>
+    <div class="mobile-scale-row">
+      <span>Scale</span>
+      ${scaleSelect}
+      <span id="recipe-scale-label-mobile" class="mobile-scale-label">1x</span>
+    </div>
+    <div class="detail-body">
       <div class="markdown-content">${html}</div>
+      ${imageStrip}
     </div>
   `;
 
-  const recipeDetail = document.getElementById("recipe-detail");
-  if (isMobileView) {
-    recipeDetail.querySelectorAll(".mobile-hero-controls, .mobile-hero-actions, .mobile-hero-fade, .mobile-hero-text").forEach((el) => el.remove());
-    const visibleDetailHeader = recipeDetail.querySelector(".detail-header:not(.hidden)");
-    if (visibleDetailHeader) visibleDetailHeader.remove();
-    recipeDetail.querySelectorAll(".detail-scale-control").forEach((el) => el.remove());
-    recipeDetail.querySelectorAll(".detail-icons").forEach((el) => el.remove());
-  } else {
-    recipeDetail.querySelectorAll("#recipe-scale-select-mobile").forEach((el) => el.remove());
-  }
+    const desktopLayout = `
+    <div class="detail-sticky">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="detail-sticky-title">${name}</div>
+      <button onclick="printRecipe()">🖨️</button>
+    </div>
+    ${detailHeader}
+    <div class="detail-body">
+      <div class="detail-image-wrap">
+        <img id="detail-main-image" data-recipe="${name}" data-filename="${coverImage || ""}" class="detail-image ${coverImage ? "" : "is-fallback"}" src="${recipeImageSrc(name, coverImage)}" onerror="this.onerror=null;this.src='${DEFAULT_RECIPE_IMAGE}';this.classList.add('is-fallback')">
+        ${coverImage ? `<button class="detail-image-delete" title="Delete image" onclick='deleteCurrentRecipeImage()'>🗑️</button>` : ""}
+      </div>
+      <div class="markdown-content">${html}</div>
+      ${imageStrip}
+    </div>
+  `;
 
-  setupRecipeScaling();
-  wrapInstructionsSection();
-  const editBtn = document.getElementById("detail-edit-btn");
-  const deleteBtn = document.getElementById("detail-delete-btn");
-  if (editBtn) editBtn.onclick = () => editRecipe(name);
-  if (deleteBtn) deleteBtn.onclick = () => deleteRecipe(name);
-  const detailImage = document.querySelector("#recipe-detail .detail-image");
-  if (detailImage) {
-    detailImage.classList.add("is-zoomable");
-    detailImage.addEventListener("click", () => {
-      if (detailImage.classList.contains("is-fallback")) return;
-      openImageLightbox(detailImage.getAttribute("src"), `${name} photo`);
-    });
-  }
+    document.getElementById("recipe-detail").innerHTML = mobileView ? mobileLayout : desktopLayout;
 
-  const scrollToRecipeTop = () => {
-    const main = document.querySelector(".main");
-    if (main) main.scrollTop = 0;
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  };
-  scrollToRecipeTop();
-  requestAnimationFrame(scrollToRecipeTop);
+    const recipeDetail = document.getElementById("recipe-detail");
+    if (!mobileView) {
+      recipeDetail.querySelectorAll("#recipe-scale-select-mobile").forEach((el) => el.remove());
+    }
+
+    setupRecipeScaling();
+    wrapInstructionsSection();
+    const editBtn = document.getElementById("detail-edit-btn");
+    const deleteBtn = document.getElementById("detail-delete-btn");
+    if (editBtn) editBtn.onclick = () => editRecipe(name);
+    if (deleteBtn) deleteBtn.onclick = () => deleteRecipe(name);
+    const detailImage = document.querySelector("#recipe-detail .detail-image");
+    if (detailImage) {
+      detailImage.classList.add("is-zoomable");
+      detailImage.addEventListener("click", () => {
+        if (detailImage.classList.contains("is-fallback")) return;
+        openImageLightbox(detailImage.getAttribute("src"), `${name} photo`);
+      });
+    }
+
+    const scrollToRecipeTop = () => {
+      const main = document.querySelector(".main");
+      if (main) main.scrollTop = 0;
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    scrollToRecipeTop();
+    requestAnimationFrame(scrollToRecipeTop);
+  } finally {
+    endLoading();
+  }
 }
 
 function goBack() {
@@ -947,13 +1653,24 @@ function setList(){
 }
 
 async function editRecipe(name) {
-  const res = await api(`${API}/recipes/${encodeURIComponent(name)}`);
+  const res = await api(`${API}/recipe?name=${encodeURIComponent(name)}`);
   if (!res.ok) {
     showToast("Could not open editor", "error");
     return;
   }
   const md = await res.text();
   const recipe = allRecipes.find(r => r.name === name);
+  let editImages = getRecipeImages(recipe);
+  let editCover = recipe?.cover || "";
+  const photosRes = await api(`${API}/recipe/photos?name=${encodeURIComponent(name)}`, { skipLoading: true });
+  if (photosRes.ok) {
+    const payload = await photosRes.json();
+    const fetchedImages = Array.isArray(payload?.images) ? payload.images.filter(Boolean) : [];
+    if (fetchedImages.length) {
+      editImages = [...new Set(fetchedImages)];
+      editCover = payload?.cover && editImages.includes(payload.cover) ? payload.cover : editImages[0];
+    }
+  }
 
   document.getElementById("modal-title").textContent = "Edit Recipe";
   document.getElementById("recipe-original-name").value = name;
@@ -961,6 +1678,9 @@ async function editRecipe(name) {
   document.getElementById("recipe-tags").value = (recipe?.tags || []).join(" ");
   renderTagSuggestions();
   document.getElementById("recipe-markdown").value = md.replace(/^Tags:.*\n+/m, "");
+  importedSourceImageUrl = "";
+  openModalImageManager(editImages, editCover);
+  document.getElementById("photo-input").value = "";
   document.getElementById("modal").classList.remove("hidden");
 }
 
@@ -969,7 +1689,8 @@ async function saveRecipe() {
   const originalName = document.getElementById("recipe-original-name").value.trim();
   const markdown = document.getElementById("recipe-markdown").value;
   const tags = document.getElementById("recipe-tags").value.trim();
-  const photo = document.getElementById("photo-input").files[0];
+  const photoInput = document.getElementById("photo-input");
+  const photos = Array.from(photoInput.files || []);
 
   if (!name || !markdown) {
     showToast("Name and markdown required", "error");
@@ -981,7 +1702,9 @@ async function saveRecipe() {
   form.append("markdown", markdown);
   form.append("tags", tags);
   if (originalName) form.append("original_name", originalName);
-  if (photo) form.append("photo", photo);
+  if (modalCover) form.append("cover", modalCover);
+  if (importedSourceImageUrl) form.append("source_image_url", importedSourceImageUrl);
+  photos.forEach((photo) => form.append("photos", photo));
 
   const res = await api(`${API}/recipes`, {
     method:"POST",
@@ -992,14 +1715,17 @@ async function saveRecipe() {
 
   document.getElementById("recipe-original-name").value = "";
   closeModal();
-  await loadRecipes();
-  openRecipe(name);
+  const refreshed = await refreshRecipesCache();
+  if (!refreshed) {
+    showToast("Recipe saved, but list refresh failed", "error");
+  }
+  await openRecipe(name);
   showToast("Recipe saved", "success");
 }
 
 async function deleteRecipe(name) {
   if (!confirm("Delete recipe?")) return;
-  const res = await api(`${API}/recipes/${encodeURIComponent(name)}`, {
+  const res = await api(`${API}/recipe?name=${encodeURIComponent(name)}`, {
     method:"DELETE",
     loadingMessage: "Deleting recipe..."
   });
@@ -1014,7 +1740,7 @@ async function deleteRecipe(name) {
 
 async function deleteRecipeImage(name, filename) {
   if (!confirm("Delete this recipe image?")) return;
-  const res = await api(`${API}/recipes/${encodeURIComponent(name)}/photo/${encodeURIComponent(filename)}`, {
+  const res = await api(`${API}/recipe/photo?name=${encodeURIComponent(name)}&filename=${encodeURIComponent(filename)}`, {
     method:"DELETE",
     loadingMessage: "Deleting image..."
   });
@@ -1024,6 +1750,38 @@ async function deleteRecipeImage(name, filename) {
   }
   await loadRecipes();
   openRecipe(name);
+  showToast("Image deleted", "success");
+}
+
+async function deleteCurrentRecipeImage() {
+  if (!currentRecipe) return;
+  const mainImage = document.getElementById("detail-main-image");
+  const filename = (mainImage?.getAttribute("data-filename") || "").trim();
+  if (!filename) return;
+  await deleteRecipeImage(currentRecipe, filename);
+}
+
+function openRecipeThumbLightbox(name, filename) {
+  if (!name || !filename) return;
+  openImageLightbox(recipeImageSrc(name, filename), `${name} photo`);
+}
+
+async function removeModalExistingImage(filename) {
+  const originalName = document.getElementById("recipe-original-name").value.trim();
+  if (!originalName) return;
+  if (!confirm("Delete this recipe image?")) return;
+  const res = await api(`${API}/recipe/photo?name=${encodeURIComponent(originalName)}&filename=${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+    loadingMessage: "Deleting image..."
+  });
+  if (!res.ok) {
+    showToast("Delete image failed", "error");
+    return;
+  }
+  modalImages = modalImages.filter((img) => img !== filename);
+  if (modalCover === filename) modalCover = modalImages[0] || "";
+  renderModalImageManager();
+  await loadRecipes();
   showToast("Image deleted", "success");
 }
 
@@ -1049,8 +1807,11 @@ function openImport() {
   document.getElementById("recipe-tags").value="";
   renderTagSuggestions();
   document.getElementById("recipe-markdown").value="";
+  document.getElementById("source-url").value="";
   document.getElementById("source-input").value="";
   document.getElementById("photo-input").value="";
+  importedSourceImageUrl = "";
+  resetModalImageState();
   document.getElementById("modal").classList.remove("hidden");
 }
 
@@ -1058,7 +1819,11 @@ function closeModal() {
   setActiveTab("recipes");
   document.getElementById("recipe-original-name").value = "";
   document.getElementById("modal").classList.add("hidden");
+  document.getElementById("source-url").value = "";
   document.getElementById("source-input").value = "";
+  document.getElementById("photo-input").value = "";
+  importedSourceImageUrl = "";
+  resetModalImageState();
   hideTagSuggestions();
 }
 
@@ -1092,12 +1857,63 @@ async function importSourceFile(file) {
   if (!existingName && payload.name) {
     nameInput.value = payload.name;
   }
+  importedSourceImageUrl = "";
   markdownInput.value = payload.markdown || "";
   showToast("File converted to markdown", "success");
 }
 
-function logout() {
-  api(`${API}/logout`, {method:"POST"}).then(()=>location.reload());
+async function importFromUrl() {
+  const urlInput = document.getElementById("source-url");
+  const markdownInput = document.getElementById("recipe-markdown");
+  const nameInput = document.getElementById("recipe-name");
+  const sourceUrl = (urlInput?.value || "").trim();
+  if (!sourceUrl) {
+    showToast("Enter a URL first", "error");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("url", sourceUrl);
+  const notes = (markdownInput?.value || "").trim();
+  if (notes) form.append("notes", notes);
+
+  const res = await api(`${API}/import/url`, {
+    method: "POST",
+    body: form,
+    loadingMessage: "Importing from URL..."
+  });
+
+  if (!res.ok) {
+    let message = "URL import failed";
+    try {
+      const payload = await res.json();
+      if (payload?.detail) message = payload.detail;
+    } catch (_) {}
+    showToast(message, "error");
+    return;
+  }
+
+  const payload = await res.json();
+  if (!nameInput.value.trim() && payload.name) {
+    nameInput.value = payload.name;
+  }
+  importedSourceImageUrl = (payload.image_url || "").trim();
+  let nextMarkdown = payload.markdown || "";
+  const sourceLine = `Source video: [Open link](${sourceUrl})`;
+  if (sourceUrl && !nextMarkdown.includes(sourceUrl)) {
+    nextMarkdown = `${nextMarkdown.trimEnd()}\n\n---\n\n${sourceLine}\n`;
+  }
+  markdownInput.value = nextMarkdown;
+  showToast(importedSourceImageUrl ? "URL imported with video screenshot" : "URL imported", "success");
+}
+
+async function logout() {
+  try {
+    await api(`${API}/logout`, { method: "POST", skipLoading: true });
+  } catch (_) {}
+  allRecipes = [];
+  renderRecipes([]);
+  showLoginOverlay();
 }
 
 function wrapInstructionsSection() {
@@ -1298,12 +2114,53 @@ function ingredientIconForText(text) {
 
 function renderIngredientNode(node, lineText) {
   if (!node) return;
-  const line = String(lineText || "").trim();
-  if (!line) {
+  const raw = String(lineText || "");
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) {
     node.textContent = lineText || "";
     return;
   }
-  node.textContent = `${ingredientIconForText(line)} ${line}`;
+  node.classList.add("ingredient-line");
+  node.textContent = "";
+
+  lines.forEach((line) => {
+    const row = document.createElement("span");
+    row.className = "ingredient-line-inner";
+
+    const text = document.createElement("span");
+    text.className = "ingredient-line-text";
+    text.textContent = `${ingredientIconForText(line)} ${line}`;
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "ingredient-add-btn";
+    addBtn.title = "Add ingredient to shopping list";
+    addBtn.setAttribute("aria-label", "Add ingredient to shopping list");
+    addBtn.textContent = "+";
+
+    addBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (addBtn.disabled) return;
+      addBtn.disabled = true;
+      addBtn.classList.add("is-pending");
+      addBtn.textContent = "…";
+      try {
+        await createShoppingListItem(line, { showSuccess: true });
+      } finally {
+        addBtn.disabled = false;
+        addBtn.classList.remove("is-pending");
+        addBtn.textContent = "+";
+      }
+    });
+
+    row.appendChild(addBtn);
+    row.appendChild(text);
+    node.appendChild(row);
+  });
 }
 
 function findIngredientLineNodes(markdown) {
@@ -1512,7 +2369,8 @@ function buildStructuredPrintLayout(detail) {
   top.appendChild(heading);
 
   const photo = detail.querySelector(".detail-image");
-  if (photo && photo.getAttribute("src")) {
+  const photoFilename = (photo?.getAttribute("data-filename") || "").trim();
+  if (photo && photo.getAttribute("src") && photoFilename) {
     const img = document.createElement("img");
     img.className = "print-top-photo";
     img.src = photo.getAttribute("src");
@@ -1656,15 +2514,34 @@ document.getElementById("recipe-tags").addEventListener("focus", renderTagSugges
 document.getElementById("recipe-tags").addEventListener("blur", () => {
   setTimeout(hideTagSuggestions, 120);
 });
+document.getElementById("bulk-tags-input").addEventListener("input", renderBulkTagSuggestions);
+document.getElementById("bulk-tags-input").addEventListener("focus", renderBulkTagSuggestions);
+document.getElementById("bulk-tags-input").addEventListener("blur", () => {
+  setTimeout(() => {
+    const box = document.getElementById("bulk-tag-suggestions");
+    if (!box) return;
+    box.classList.add("hidden");
+  }, 120);
+});
 document.getElementById("source-input").addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   importSourceFile(file);
+});
+document.getElementById("photo-input").addEventListener("change", () => {
+  syncModalPendingUploads();
+});
+document.getElementById("shopping-item-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addShoppingItem();
+  }
 });
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeImageLightbox();
     closeMobileRecipeMenu();
+    closeBulkTagModal();
   }
 });
 
@@ -1674,19 +2551,69 @@ document.addEventListener("click", () => {
 
 /* Close mobile sidebar if rotating to desktop */
 window.addEventListener("resize", () => {
-  if (!window.matchMedia("(max-width: 768px)").matches) {
+  if (!isMobileView()) {
     closeMobileSidebar();
   }
 });
 
 window.addEventListener("beforeprint", computePrintScale);
 window.addEventListener("afterprint", resetPrintScale);
+window.addEventListener("online", () => {
+  void autoRefreshRecipes();
+});
+window.addEventListener("focus", () => {
+  void autoRefreshRecipes();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  void autoRefreshRecipes();
+});
+
+async function autoRefreshRecipes() {
+  const now = Date.now();
+  if (authRequired || syncInFlight || now - lastAutoSyncAt < 45000) return;
+  lastAutoSyncAt = now;
+  syncInFlight = true;
+  try {
+    const ok = await refreshRecipesCache(true);
+    if (ok) renderFromSearch();
+  } finally {
+    syncInFlight = false;
+  }
+}
+
+async function initApp() {
+  disableServiceWorkers();
+  try {
+    const params = new URLSearchParams(window.location.search);
+    initialRecipeFromQuery = (params.get("recipe") || "").trim();
+  } catch (_) {
+    initialRecipeFromQuery = "";
+  }
+  const authenticated = await checkAuth();
+  if (!authenticated) {
+    showLoginOverlay();
+    hideSplash();
+    return;
+  }
+  hideLoginOverlay();
+  await loadRecipes({ forceNetwork: true });
+  await loadShoppingList();
+  if (initialRecipeFromQuery) {
+    const targetName = initialRecipeFromQuery;
+    initialRecipeFromQuery = "";
+    if (allRecipes.some((recipe) => recipe.name === targetName)) {
+      await openRecipe(targetName);
+    }
+  }
+}
 
 setGrid();
 updateBulkToolbar();
 setupHapticFeedback();
-disableServiceWorkers();
-loadRecipes();
+setupMobilePanLock();
+loadViewModePreference();
+void initApp();
 setTimeout(hideSplash, 2800);
 </script>
 </body>

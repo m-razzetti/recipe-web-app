@@ -5,3 +5,5 @@ python-multipart
 pypdf
 Pillow
 pillow-heif
+pytesseract
+requests
